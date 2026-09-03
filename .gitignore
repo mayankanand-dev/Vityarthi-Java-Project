@@ -1,0 +1,24 @@
+# Byte-compiled / Object / Binary files
+bin/
+target/
+*.class
+
+# Package Files
+*.jar
+!lib/*.jar
+
+# Local database & logs
+data/
+logs/
+exports/*.csv
+
+# Temporary build files
+sources.txt
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
