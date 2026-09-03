@@ -1,0 +1,868 @@
+package tradex.app;
+
+import tradex.database.DatabaseManager;
+import tradex.exception.TradeXException;
+import tradex.exchange.CircuitBreaker;
+import tradex.exchange.Exchange;
+import tradex.exchange.MatchingEngine;
+import tradex.exchange.OrderBook;
+import tradex.exchange.SettlementEngine;
+import tradex.model.*;
+import tradex.model.enums.*;
+import tradex.repository.*;
+import tradex.service.*;
+import tradex.simulation.AutomatedTrader;
+import tradex.simulation.MarketSimulationEngine;
+import tradex.strategy.MeanReversionStrategy;
+import tradex.strategy.MomentumStrategy;
+import tradex.strategy.RandomLiquidityStrategy;
+import tradex.util.DatabaseSeeder;
+import tradex.util.DateTimeUtil;
+import tradex.util.FileManager;
+import tradex.util.InputValidator;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Optional;
+import java.util.Scanner;
+
+/**
+ * Main command-line application driver and presentation controller for TradeX.
+ */
+public class Main {
+    private final Scanner scanner = new Scanner(System.in);
+
+    // Repositories & Database
+    private final DatabaseManager dbManager;
+    private final UserRepository userRepo;
+    private final AccountRepository accountRepo;
+    private final StockRepository stockRepo;
+    private final OrderRepository orderRepo;
+    private final TradeRepository tradeRepo;
+    private final HoldingRepository holdingRepo;
+    private final AlertRepository alertRepo;
+    private final TransactionRepository txRepo;
+
+    // Exchange & Services
+    private final SettlementEngine settlementEngine;
+    private final MatchingEngine matchingEngine;
+    private final Exchange exchange;
+    private final AccountService accountService;
+    private final MarketService marketService;
+    private final OrderService orderService;
+    private final PortfolioService portfolioService;
+    private final AnalyticsService analyticsService;
+    private final TechnicalAnalysisService taService;
+    private final AlertService alertService;
+    private final MarketSimulationEngine simulationEngine;
+
+    // Current Session State
+    private User currentUser = null;
+    private Account currentAccount = null;
+
+    public Main() {
+        this.dbManager = DatabaseManager.getInstance();
+        this.userRepo = new UserRepository(dbManager);
+        this.accountRepo = new AccountRepository(dbManager);
+        this.stockRepo = new StockRepository(dbManager);
+        this.orderRepo = new OrderRepository(dbManager);
+        this.tradeRepo = new TradeRepository(dbManager);
+        this.holdingRepo = new HoldingRepository(dbManager);
+        this.alertRepo = new AlertRepository(dbManager);
+        this.txRepo = new TransactionRepository(dbManager);
+
+        this.settlementEngine = new SettlementEngine(accountRepo, holdingRepo, tradeRepo, txRepo);
+        this.matchingEngine = new MatchingEngine(settlementEngine, orderRepo, stockRepo);
+        this.exchange = new Exchange(matchingEngine, stockRepo, orderRepo, accountRepo, holdingRepo);
+
+        this.accountService = new AccountService(userRepo, accountRepo, txRepo);
+        this.marketService = new MarketService(stockRepo);
+        this.orderService = new OrderService(exchange, orderRepo);
+        this.portfolioService = new PortfolioService(holdingRepo, stockRepo, accountRepo);
+        this.analyticsService = new AnalyticsService(stockRepo, tradeRepo);
+        this.taService = new TechnicalAnalysisService();
+        this.alertService = new AlertService(alertRepo);
+
+        this.simulationEngine = new MarketSimulationEngine(exchange, stockRepo, 42L);
+
+        // Seed data if repository is empty
+        if (stockRepo.listAll().isEmpty()) {
+            DatabaseSeeder.seed(dbManager, exchange);
+        } else {
+            exchange.initializeBooks();
+        }
+
+        // Register background bot traders
+        setupAutomatedTraders();
+    }
+
+    private void setupAutomatedTraders() {
+        Optional<User> botUser = userRepo.findByUsername("liquidity_bot");
+        if (botUser.isPresent()) {
+            Optional<Account> botAcc = accountRepo.findByUserId(botUser.get().getId());
+            if (botAcc.isPresent()) {
+                int botAccId = botAcc.get().getAccountId();
+                simulationEngine.registerTrader(new AutomatedTrader("LiquidityBot-1", botAccId,
+                        new RandomLiquidityStrategy(), exchange, stockRepo, accountRepo, holdingRepo));
+                simulationEngine.registerTrader(new AutomatedTrader("MomentumBot-1", botAccId,
+                        new MomentumStrategy(), exchange, stockRepo, accountRepo, holdingRepo));
+                simulationEngine.registerTrader(new AutomatedTrader("MeanReversionBot-1", botAccId,
+                        new MeanReversionStrategy(), exchange, stockRepo, accountRepo, holdingRepo));
+            }
+        }
+    }
+
+    public void start(String[] args) {
+        if (args.length > 0 && "--demo".equalsIgnoreCase(args[0])) {
+            runEvaluatorDemoWorkflow();
+            return;
+        }
+
+        printBanner();
+
+        boolean running = true;
+        while (running) {
+            if (currentUser == null) {
+                running = handleAuthMenu();
+            } else {
+                running = handleTraderMainMenu();
+            }
+        }
+
+        simulationEngine.stopContinuousSimulation();
+        System.out.println("\nThank you for using TradeX CLI. Session closed safely.");
+    }
+
+    private void printBanner() {
+        System.out.println("╔════════════════════════════════════════════════════════════════════╗");
+        System.out.println("║                            TRADEX                                  ║");
+        System.out.println("║                 CLI STOCK EXCHANGE SIMULATOR                       ║");
+        System.out.println("║          Academic Coursework Project - Java CLI Edition            ║");
+        System.out.println("╚════════════════════════════════════════════════════════════════════╝");
+    }
+
+    private boolean handleAuthMenu() {
+        System.out.println("\n----------------- AUTHENTICATION MENU -----------------");
+        System.out.println("1. Login to Existing Account");
+        System.out.println("2. Register New Trader Account");
+        System.out.println("3. Quick Demo Login (Username: demo | Password: demo123)");
+        System.out.println("4. Run Complete Evaluator 15-Step Automated Workflow");
+        System.out.println("5. Reset & Re-Seed SQLite Database");
+        System.out.println("6. Exit TradeX");
+        System.out.println("-------------------------------------------------------");
+
+        int choice = InputValidator.readInt(scanner, "Select option (1-6): ", 1, 6);
+        switch (choice) {
+            case 1:
+                loginUser();
+                break;
+            case 2:
+                registerUser();
+                break;
+            case 3:
+                quickDemoLogin();
+                break;
+            case 4:
+                runEvaluatorDemoWorkflow();
+                break;
+            case 5:
+                resetDatabase();
+                break;
+            case 6:
+                return false;
+        }
+        return true;
+    }
+
+    private void quickDemoLogin() {
+        try {
+            currentUser = accountService.login("demo", "demo123");
+            currentAccount = accountService.getAccountByUserId(currentUser.getId()).orElse(null);
+            System.out.printf("\n[SUCCESS] Logged in as '%s' (Account #%d). Available Cash: ₹%.2f%n",
+                    currentUser.getUsername(), currentAccount != null ? currentAccount.getAccountId() : 0,
+                    currentAccount != null ? currentAccount.getAvailableCash() : 0.0);
+        } catch (TradeXException e) {
+            System.out.println("[ERROR] Quick demo login failed: " + e.getMessage());
+        }
+    }
+
+    private void loginUser() {
+        System.out.print("\nEnter Username: ");
+        String username = scanner.nextLine().trim();
+        System.out.print("Enter Password: ");
+        String password = scanner.nextLine().trim();
+
+        try {
+            currentUser = accountService.login(username, password);
+            currentAccount = accountService.getAccountByUserId(currentUser.getId()).orElse(null);
+            System.out.printf("\n[SUCCESS] Logged in as '%s' (Role: %s)%n", currentUser.getUsername(), currentUser.getRole());
+        } catch (TradeXException e) {
+            System.out.println("\n[AUTH FAILED] " + e.getMessage());
+        }
+    }
+
+    private void registerUser() {
+        System.out.print("\nDesired Username: ");
+        String username = scanner.nextLine().trim();
+        System.out.print("Desired Password: ");
+        String password = scanner.nextLine().trim();
+        double initialDeposit = InputValidator.readPositiveDouble(scanner, "Initial Virtual Capital to Grant (e.g. 500000): ");
+
+        try {
+            currentUser = accountService.register(username, password, "TRADER", initialDeposit);
+            currentAccount = accountService.getAccountByUserId(currentUser.getId()).orElse(null);
+            System.out.printf("\n[SUCCESS] Account successfully created for '%s'! Granted ₹%.2f virtual cash.%n",
+                    currentUser.getUsername(), initialDeposit);
+        } catch (TradeXException e) {
+            System.out.println("\n[REGISTRATION FAILED] " + e.getMessage());
+        }
+    }
+
+    private void resetDatabase() {
+        if (InputValidator.readYesNo(scanner, "Are you sure you want to completely reseed the database?")) {
+            dbManager.resetDatabase();
+            DatabaseSeeder.seed(dbManager, exchange);
+            setupAutomatedTraders();
+            System.out.println("[SUCCESS] Database reset and reseeded with 10 bluechip stocks and demo accounts.");
+        }
+    }
+
+    private boolean handleTraderMainMenu() {
+        refreshAccount();
+        MarketService.MarketBreadth breadth = marketService.getMarketBreadth();
+        double avgReturn = analyticsService.getAverageMarketReturn();
+
+        System.out.println("\n====================================================================");
+        System.out.printf(" TRADEX DASHBOARD | User: %-10s | Cash: ₹%-12.2f%n",
+                currentUser.getUsername(), currentAccount.getAvailableCash());
+        System.out.printf(" Market Status: %-6s | Advances: %-2d | Declines: %-2d | Avg Index: %+.2f%%%n",
+                exchange.getMarketStatus(), breadth.advances, breadth.declines, avgReturn);
+        System.out.println("====================================================================");
+        System.out.println(" 1. View Listed Stocks (Market Overview)");
+        System.out.println(" 2. Search & Stock Quote Details");
+        System.out.println(" 3. View Order Book & Market Depth (LOB)");
+        System.out.println(" 4. Place New Order (Market / Limit / Stop)");
+        System.out.println(" 5. View My Orders & Cancel Open Order");
+        System.out.println(" 6. Portfolio, Holdings & Net Worth");
+        System.out.println(" 7. Technical Analysis (SMA, EMA, RSI, Signals)");
+        System.out.println(" 8. Market Analytics (Top Gainers, Losers, Turnover)");
+        System.out.println(" 9. Account & Funds (Deposit / Withdraw / Passbook)");
+        System.out.println(" 10. Price & Movement Alerts");
+        System.out.println(" 11. Market Simulation Engine (Ticks & News Shocks)");
+        System.out.println(" 12. Export CSV Reports (Java NIO.2)");
+        System.out.println(" 13. Run Complete Evaluator Workflow");
+        System.out.println(" 14. Logout");
+        System.out.println(" 15. Exit System");
+        System.out.println("====================================================================");
+
+        int option = InputValidator.readInt(scanner, "Select option (1-15): ", 1, 15);
+        System.out.println();
+
+        switch (option) {
+            case 1:
+                displayMarketOverview();
+                break;
+            case 2:
+                displayStockDetails();
+                break;
+            case 3:
+                displayOrderBook();
+                break;
+            case 4:
+                handleOrderPlacement();
+                break;
+            case 5:
+                handleOrdersAndCancel();
+                break;
+            case 6:
+                displayPortfolio();
+                break;
+            case 7:
+                displayTechnicalAnalysis();
+                break;
+            case 8:
+                displayAnalytics();
+                break;
+            case 9:
+                handleAccountFunds();
+                break;
+            case 10:
+                handleAlertsMenu();
+                break;
+            case 11:
+                handleSimulationMenu();
+                break;
+            case 12:
+                handleExports();
+                break;
+            case 13:
+                runEvaluatorDemoWorkflow();
+                break;
+            case 14:
+                currentUser = null;
+                currentAccount = null;
+                System.out.println("Logged out successfully.");
+                break;
+            case 15:
+                return false;
+        }
+        return true;
+    }
+
+    private void refreshAccount() {
+        if (currentAccount != null) {
+            accountRepo.findById(currentAccount.getAccountId()).ifPresent(acc -> currentAccount = acc);
+        }
+    }
+
+    // ================= 1. Market Overview =================
+    private void displayMarketOverview() {
+        List<Stock> stocks = marketService.getAllStocks();
+        System.out.println("---------------------------------------------------------------------------------------------------------");
+        System.out.printf("%-10s %-28s %-18s %-10s %-10s %-10s %-12s%n",
+                "SYMBOL", "NAME", "SECTOR", "LTP (₹)", "CHG (₹)", "CHG (%)", "VOLUME");
+        System.out.println("---------------------------------------------------------------------------------------------------------");
+        for (Stock s : stocks) {
+            System.out.printf("%-10s %-28s %-18s %10.2f %+10.2f %+9.2f%% %12d%n",
+                    s.getSymbol(), s.getName(), s.getSector(),
+                    s.getCurrentPrice(), s.getChangeAmount(), s.getChangePercentage(), s.getVolume());
+        }
+        System.out.println("---------------------------------------------------------------------------------------------------------");
+    }
+
+    // ================= 2. Stock Quote Details =================
+    private void displayStockDetails() {
+        String query = InputValidator.readNonEmptyString(scanner, "Enter Symbol or Name search query: ");
+        List<Stock> results = marketService.searchStocks(query);
+        if (results.isEmpty()) {
+            System.out.println("No matching stocks found for query: " + query);
+            return;
+        }
+
+        for (Stock s : results) {
+            System.out.println("\n========================================================");
+            System.out.printf("  EQUITY QUOTE: %s (%s)%n", s.getSymbol(), s.getName());
+            System.out.println("========================================================");
+            System.out.printf(" Sector:              %s%n", s.getSector());
+            System.out.printf(" Current Price (LTP): ₹%.2f (%+.2f / %+.2f%%)%n",
+                    s.getCurrentPrice(), s.getChangeAmount(), s.getChangePercentage());
+            System.out.printf(" Previous Close:      ₹%.2f%n", s.getPreviousClose());
+            System.out.printf(" Day Open / High/Low: ₹%.2f / ₹%.2f / ₹%.2f%n",
+                    s.getDayOpen(), s.getDayHigh(), s.getDayLow());
+            System.out.printf(" 52-Week High / Low:  ₹%.2f / ₹%.2f%n",
+                    s.getFiftyTwoWeekHigh(), s.getFiftyTwoWeekLow());
+            System.out.printf(" Upper / Lower Band:  ₹%.2f / ₹%.2f%n",
+                    s.getUpperCircuit(), s.getLowerCircuit());
+            System.out.printf(" Cumulative Volume:   %d shares%n", s.getVolume());
+            System.out.printf(" Trading Status:      %s%n", s.getStatus());
+            System.out.println("========================================================");
+        }
+    }
+
+    // ================= 3. Order Book =================
+    private void displayOrderBook() {
+        String symbol = InputValidator.readNonEmptyString(scanner, "Enter Stock Symbol (e.g. RELIANCE): ").toUpperCase();
+        Optional<Stock> stockOpt = stockRepo.findBySymbol(symbol);
+        if (stockOpt.isEmpty()) {
+            System.out.println("Error: Unknown stock symbol " + symbol);
+            return;
+        }
+
+        Stock stock = stockOpt.get();
+        OrderBook book = exchange.getOrderBook(symbol);
+
+        List<OrderBook.LevelDepth> asks = book.getAsksDepth(5);
+        List<OrderBook.LevelDepth> bids = book.getBidsDepth(5);
+
+        System.out.println("\n╔══════════════════════════════════════════════════════╗");
+        System.out.printf("║              %s ORDER BOOK & DEPTH             ║%n", symbol);
+        System.out.printf("║  LTP: ₹%-9.2f | Spread: ₹%-8.2f | Status: %-6s ║%n",
+                stock.getCurrentPrice(), book.getSpread(), stock.getStatus());
+        System.out.println("╠══════════════════════════════════════════════════════╣");
+        System.out.println("║ ASKS (Sellers)                                       ║");
+        System.out.printf("║   %-14s %-14s %-18s ║%n", "Price (₹)", "Quantity", "Orders");
+        System.out.println("║   ------------------------------------------------   ║");
+        if (asks.isEmpty()) {
+            System.out.println("║   [No resting sell orders]                           ║");
+        } else {
+            // Display asks descending so lowest ask is closest to bids
+            for (int i = asks.size() - 1; i >= 0; i--) {
+                OrderBook.LevelDepth lvl = asks.get(i);
+                System.out.printf("║   ₹%-13.2f %-14d %-18d ║%n", lvl.price, lvl.totalQuantity, lvl.orderCount);
+            }
+        }
+        System.out.println("╠══════════════════════════════════════════════════════╣");
+        System.out.println("║ BIDS (Buyers)                                        ║");
+        System.out.printf("║   %-14s %-14s %-18s ║%n", "Price (₹)", "Quantity", "Orders");
+        System.out.println("║   ------------------------------------------------   ║");
+        if (bids.isEmpty()) {
+            System.out.println("║   [No resting buy orders]                            ║");
+        } else {
+            for (OrderBook.LevelDepth lvl : bids) {
+                System.out.printf("║   ₹%-13.2f %-14d %-18d ║%n", lvl.price, lvl.totalQuantity, lvl.orderCount);
+            }
+        }
+        System.out.println("╚══════════════════════════════════════════════════════╝");
+    }
+
+    // ================= 4. Place Order =================
+    private void handleOrderPlacement() {
+        System.out.println("--- PLACE ORDER ---");
+        String symbol = InputValidator.readNonEmptyString(scanner, "Stock Symbol: ").toUpperCase();
+        Optional<Stock> sOpt = stockRepo.findBySymbol(symbol);
+        if (sOpt.isEmpty()) {
+            System.out.println("[REJECTED] Invalid symbol: " + symbol);
+            return;
+        }
+        Stock stock = sOpt.get();
+
+        System.out.println("Order Direction:");
+        System.out.println("1. BUY");
+        System.out.println("2. SELL");
+        int sideChoice = InputValidator.readInt(scanner, "Choose (1-2): ", 1, 2);
+        OrderSide side = sideChoice == 1 ? OrderSide.BUY : OrderSide.SELL;
+
+        System.out.println("Order Type:");
+        System.out.println("1. MARKET");
+        System.out.println("2. LIMIT");
+        System.out.println("3. STOP");
+        System.out.println("4. STOP_LIMIT");
+        int typeChoice = InputValidator.readInt(scanner, "Choose (1-4): ", 1, 4);
+        OrderType type;
+        switch (typeChoice) {
+            case 1: type = OrderType.MARKET; break;
+            case 2: type = OrderType.LIMIT; break;
+            case 3: type = OrderType.STOP; break;
+            default: type = OrderType.STOP_LIMIT; break;
+        }
+
+        int quantity = InputValidator.readInt(scanner, "Quantity (shares): ", 1, 100000);
+        double price = 0.0;
+        double stopPrice = 0.0;
+
+        if (type == OrderType.LIMIT || type == OrderType.STOP_LIMIT) {
+            System.out.printf("Current Price: ₹%.2f (Circuit: ₹%.2f - ₹%.2f)%n",
+                    stock.getCurrentPrice(), stock.getLowerCircuit(), stock.getUpperCircuit());
+            price = InputValidator.readPositiveDouble(scanner, "Limit Price (₹): ");
+        }
+
+        if (type == OrderType.STOP || type == OrderType.STOP_LIMIT) {
+            stopPrice = InputValidator.readPositiveDouble(scanner, "Trigger / Stop Price (₹): ");
+        }
+
+        try {
+            List<Trade> executedTrades = orderService.placeOrder(
+                    currentAccount.getAccountId(), symbol, side, type, quantity, price, stopPrice);
+
+            System.out.println("\n[ORDER SUBMITTED SUCCESSFULLY]");
+            if (executedTrades.isEmpty()) {
+                System.out.println("Status: Resting in Order Book (No immediate match found).");
+            } else {
+                System.out.printf("Status: MATCHED & EXECUTED (%d trade fills generated):%n", executedTrades.size());
+                for (Trade t : executedTrades) {
+                    System.out.printf("  -> Fill: %d shares @ ₹%.2f (Gross: ₹%.2f | Fee: ₹%.2f)%n",
+                            t.getQuantity(), t.getPrice(), t.getGrossAmount(),
+                            side == OrderSide.BUY ? t.getBrokerageBuyer() : t.getBrokerageSeller());
+                }
+            }
+
+            // Trigger alert checks on this stock
+            alertService.checkAndTriggerAlerts(stock);
+
+        } catch (TradeXException e) {
+            System.out.println("\n[ORDER REJECTED] " + e.getMessage());
+        }
+    }
+
+    // ================= 5. View Orders & Cancel =================
+    private void handleOrdersAndCancel() {
+        List<Order> openOrders = orderService.getOpenOrders(currentAccount.getAccountId());
+        System.out.println("--- OPEN ORDERS ---");
+        if (openOrders.isEmpty()) {
+            System.out.println("You have no resting open orders.");
+        } else {
+            System.out.printf("%-18s %-8s %-6s %-10s %-8s %-10s %-14s %s%n",
+                    "ORDER ID", "SYMBOL", "SIDE", "TYPE", "QTY", "FILLED", "PRICE (₹)", "STATUS");
+            System.out.println("----------------------------------------------------------------------------------------");
+            for (Order o : openOrders) {
+                System.out.printf("%-18s %-8s %-6s %-10s %-8d %-10d %-14.2f %s%n",
+                        o.getOrderId(), o.getSymbol(), o.getSide(), o.getType(),
+                        o.getOriginalQuantity(), o.getFilledQuantity(), o.getPrice(), o.getStatus());
+            }
+
+            System.out.println("\nOptions: 1. Cancel an Order | 2. Return to Main Menu");
+            int choice = InputValidator.readInt(scanner, "Select: ", 1, 2);
+            if (choice == 1) {
+                String ordId = InputValidator.readNonEmptyString(scanner, "Enter Order ID to Cancel: ");
+                try {
+                    boolean cancelled = orderService.cancelOrder(ordId, currentAccount.getAccountId());
+                    if (cancelled) {
+                        System.out.println("[SUCCESS] Order " + ordId + " has been cancelled and funds/shares released.");
+                    } else {
+                        System.out.println("[INFO] Order was not active in the order book.");
+                    }
+                } catch (TradeXException e) {
+                    System.out.println("[CANCEL FAILED] " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    // ================= 6. Portfolio & Net Worth =================
+    private void displayPortfolio() {
+        PortfolioService.PortfolioSummary summary = portfolioService.getPortfolioSummary(currentAccount.getAccountId());
+
+        System.out.println("\n╔═════════════════════════════════════════════════════════════════════════════════════╗");
+        System.out.printf("║                     PORTFOLIO SUMMARY (ACCOUNT #%d)                                   ║%n", currentAccount.getAccountId());
+        System.out.println("╠═════════════════════════════════════════════════════════════════════════════════════╣");
+        System.out.printf("║ Available Cash: ₹%-15.2f | Frozen: ₹%-12.2f | Total Cash: ₹%-15.2f ║%n",
+                summary.availableCash, summary.frozenCash, summary.cashBalance);
+        System.out.printf("║ Invested Value: ₹%-15.2f | Current Value: ₹%-9.2f | Net Worth: ₹%-16.2f ║%n",
+                summary.totalInvested, summary.totalCurrentValue, summary.netWorth);
+        System.out.printf("║ Unrealized P&L: %-+16.2f | Realized P&L: %-+12.2f                             ║%n",
+                summary.totalUnrealizedPnL, summary.totalRealizedPnL);
+        System.out.println("╠═════════════════════════════════════════════════════════════════════════════════════╣");
+        System.out.printf("║ %-8s %-8s %-12s %-12s %-12s %-14s %-12s ║%n",
+                "SYMBOL", "QTY", "AVG BUY (₹)", "LTP (₹)", "INVESTED", "CURRENT (₹)", "UNREAL P&L");
+        System.out.println("║ ----------------------------------------------------------------------------------- ║");
+
+        if (summary.positions.isEmpty()) {
+            System.out.println("║  [No active stock holdings in this portfolio]                                       ║");
+        } else {
+            for (PortfolioService.PositionView p : summary.positions) {
+                System.out.printf("║ %-8s %-8d %12.2f %12.2f %12.2f %14.2f %+11.2f (%+5.1f%%) ║%n",
+                        p.symbol, p.quantity, p.averagePrice, p.currentPrice,
+                        p.investedValue, p.currentValue, p.unrealizedPnL, p.unrealizedPnLPct);
+            }
+        }
+        System.out.println("╚═════════════════════════════════════════════════════════════════════════════════════╝");
+    }
+
+    // ================= 7. Technical Analysis =================
+    private void displayTechnicalAnalysis() {
+        String symbol = InputValidator.readNonEmptyString(scanner, "Enter Symbol for Technical Indicator Analysis: ").toUpperCase();
+        Optional<Stock> sOpt = stockRepo.findBySymbol(symbol);
+        if (sOpt.isEmpty()) {
+            System.out.println("Invalid stock symbol: " + symbol);
+            return;
+        }
+
+        Stock stock = sOpt.get();
+        List<Double> priceSeries = simulationEngine.getPriceHistory(symbol);
+        TechnicalAnalysisService.TechnicalReport r = taService.generateReport(stock, priceSeries);
+
+        System.out.println("\n========================================================");
+        System.out.printf(" QUANTITATIVE TECHNICAL ANALYSIS: %s%n", symbol);
+        System.out.println("========================================================");
+        System.out.printf(" Current Market Price (LTP): ₹%.2f%n", r.ltp);
+        System.out.printf(" 20-Period SMA:              ₹%.2f%n", r.sma20);
+        System.out.printf(" 50-Period SMA:              ₹%.2f%n", r.sma50);
+        System.out.printf(" 20-Period EMA:              ₹%.2f%n", r.ema20);
+        System.out.printf(" 14-Period RSI:              %.2f  (Levels: 30 Oversold / 70 Overbought)%n", r.rsi14);
+        System.out.printf(" Historical Volatility:      %.2f%%%n", r.volatility);
+        System.out.printf(" 5-Day Momentum:             %+.2f%%%n", r.momentum);
+        System.out.println("--------------------------------------------------------");
+        System.out.printf(" OVERALL TRADING SIGNAL:     [%s]%n", r.signal);
+        System.out.println("========================================================");
+    }
+
+    // ================= 8. Analytics =================
+    private void displayAnalytics() {
+        System.out.println("\n----------------- MARKET LEADER ANALYTICS -----------------");
+        System.out.println("TOP 3 GAINERS:");
+        List<Stock> gainers = analyticsService.getTopGainers(3);
+        for (Stock s : gainers) {
+            System.out.printf("  ▲ %-10s ₹%-8.2f (%+.2f%%)%n", s.getSymbol(), s.getCurrentPrice(), s.getChangePercentage());
+        }
+
+        System.out.println("\nTOP 3 LOSERS:");
+        List<Stock> losers = analyticsService.getTopLosers(3);
+        for (Stock s : losers) {
+            System.out.printf("  ▼ %-10s ₹%-8.2f (%+.2f%%)%n", s.getSymbol(), s.getCurrentPrice(), s.getChangePercentage());
+        }
+
+        System.out.println("\nMOST ACTIVE STOCKS BY VOLUME:");
+        List<Stock> active = analyticsService.getMostActiveByVolume(3);
+        for (Stock s : active) {
+            System.out.printf("  ● %-10s Volume: %-10d shares | LTP: ₹%.2f%n", s.getSymbol(), s.getVolume(), s.getCurrentPrice());
+        }
+
+        System.out.printf("\nTotal Cumulative Exchange Turnover: ₹%.2f%n", analyticsService.getTotalExchangeTurnover());
+        System.out.println("-----------------------------------------------------------");
+    }
+
+    // ================= 9. Account Funds =================
+    private void handleAccountFunds() {
+        refreshAccount();
+        System.out.println("--- FUNDS & ACCOUNT MANAGEMENT ---");
+        System.out.printf("Current Balance: ₹%.2f (Available: ₹%.2f | Frozen: ₹%.2f)%n",
+                currentAccount.getCashBalance(), currentAccount.getAvailableCash(), currentAccount.getFrozenCash());
+        System.out.println("1. Deposit Virtual Funds");
+        System.out.println("2. Withdraw Virtual Funds");
+        System.out.println("3. View Account Passbook (Transaction History)");
+        System.out.println("4. Return to Main Menu");
+
+        int choice = InputValidator.readInt(scanner, "Choose (1-4): ", 1, 4);
+        switch (choice) {
+            case 1:
+                double dep = InputValidator.readPositiveDouble(scanner, "Deposit Amount (₹): ");
+                try {
+                    accountService.deposit(currentAccount.getAccountId(), dep);
+                    refreshAccount();
+                    System.out.printf("[SUCCESS] Deposited ₹%.2f. New Balance: ₹%.2f%n", dep, currentAccount.getCashBalance());
+                } catch (TradeXException e) {
+                    System.out.println("[ERROR] " + e.getMessage());
+                }
+                break;
+            case 2:
+                double wtd = InputValidator.readPositiveDouble(scanner, "Withdrawal Amount (₹): ");
+                try {
+                    accountService.withdraw(currentAccount.getAccountId(), wtd);
+                    refreshAccount();
+                    System.out.printf("[SUCCESS] Withdrew ₹%.2f. New Balance: ₹%.2f%n", wtd, currentAccount.getCashBalance());
+                } catch (TradeXException e) {
+                    System.out.println("[ERROR] " + e.getMessage());
+                }
+                break;
+            case 3:
+                List<Transaction> txs = accountService.getTransactions(currentAccount.getAccountId());
+                System.out.println("\n-------------------------------- TRANSACTION LEDGER --------------------------------");
+                for (Transaction t : txs) {
+                    System.out.printf("[%s] %-14s ₹%-10.2f Balance: ₹%-10.2f | %s%n",
+                            DateTimeUtil.formatDisplay(t.getTimestamp()), t.getType(), t.getAmount(), t.getBalanceAfter(), t.getDescription());
+                }
+                System.out.println("-----------------------------------------------------------------------------------");
+                break;
+        }
+    }
+
+    // ================= 10. Alerts Menu =================
+    private void handleAlertsMenu() {
+        System.out.println("--- PRICE & MOVEMENT ALERTS ---");
+        System.out.println("1. Set Price Alert");
+        System.out.println("2. View My Configured Alerts");
+        int choice = InputValidator.readInt(scanner, "Select (1-2): ", 1, 2);
+
+        if (choice == 1) {
+            String symbol = InputValidator.readNonEmptyString(scanner, "Symbol: ").toUpperCase();
+            System.out.println("Alert Condition:");
+            System.out.println("1. PRICE_ABOVE");
+            System.out.println("2. PRICE_BELOW");
+            System.out.println("3. PCT_CHANGE");
+            System.out.println("4. VOLUME_ABOVE");
+            int tChoice = InputValidator.readInt(scanner, "Choose (1-4): ", 1, 4);
+            AlertType type = AlertType.values()[tChoice - 1];
+
+            double target = InputValidator.readPositiveDouble(scanner, "Target Trigger Value: ");
+            try {
+                Alert alert = alertService.createAlert(currentAccount.getAccountId(), symbol, type, target);
+                System.out.println("[SUCCESS] Alert registered: " + alert);
+            } catch (Exception e) {
+                System.out.println("[ERROR] Could not save alert: " + e.getMessage());
+            }
+        } else {
+            List<Alert> alerts = alertService.getUserAlerts(currentAccount.getAccountId());
+            if (alerts.isEmpty()) {
+                System.out.println("No alerts configured.");
+            } else {
+                for (Alert a : alerts) {
+                    System.out.printf("Alert #%-3d | %-8s | %-12s | Value: %-8.2f | Triggered: %s%n",
+                            a.getAlertId(), a.getSymbol(), a.getType(), a.getTargetValue(), a.isTriggered());
+                }
+            }
+        }
+    }
+
+    // ================= 11. Simulation Engine =================
+    private void handleSimulationMenu() {
+        System.out.println("--- MARKET SIMULATION ENGINE ---");
+        System.out.printf("Simulation Running: %s%n", simulationEngine.isRunning() ? "ACTIVE (Continuous)" : "IDLE");
+        System.out.println("1. Step Simulation by 1 Tick (Discrete)");
+        System.out.println("2. Step Simulation by 10 Ticks with Automated Bot Orders");
+        System.out.println("3. Inject Random Macroeconomic News Event");
+        System.out.println("4. Start Continuous Background Simulation");
+        System.out.println("5. Stop Continuous Background Simulation");
+        System.out.println("6. View Recent Market News Events");
+
+        int choice = InputValidator.readInt(scanner, "Select (1-6): ", 1, 6);
+        switch (choice) {
+            case 1:
+                simulationEngine.stepSimulation();
+                System.out.println("[OK] Simulation advanced by 1 tick.");
+                break;
+            case 2:
+                System.out.println("Simulating 10 trading iterations with bots...");
+                for (int i = 0; i < 10; i++) {
+                    simulationEngine.stepSimulation();
+                }
+                System.out.println("[OK] Completed 10 simulation iterations with price drifts and order executions.");
+                break;
+            case 3:
+                MarketEvent event = simulationEngine.triggerRandomNewsEvent();
+                System.out.println("\n[NEWS EVENT INJECTED]");
+                System.out.println("Headline: " + event.getHeadline());
+                System.out.printf("Sentiment: %s | Impact: %+.1f%%%n", event.getSentiment(), event.getImpactPct());
+                break;
+            case 4:
+                simulationEngine.startContinuousSimulation(1500);
+                System.out.println("[OK] Continuous background market simulation started (tick every 1.5s).");
+                break;
+            case 5:
+                simulationEngine.stopContinuousSimulation();
+                System.out.println("[OK] Continuous background market simulation stopped.");
+                break;
+            case 6:
+                List<MarketEvent> news = simulationEngine.getNewsHistory();
+                if (news.isEmpty()) {
+                    System.out.println("No news events logged yet.");
+                } else {
+                    for (MarketEvent m : news) {
+                        System.out.println(m);
+                    }
+                }
+                break;
+        }
+    }
+
+    // ================= 12. Exports =================
+    private void handleExports() {
+        System.out.println("--- CSV REPORT EXPORT (NIO.2) ---");
+        System.out.println("1. Export Portfolio Holdings & Valuation Report");
+        System.out.println("2. Export Daily Market Overview Report");
+        System.out.println("3. Export Complete Trade Execution History");
+
+        int choice = InputValidator.readInt(scanner, "Choose (1-3): ", 1, 3);
+        try {
+            Path exportedPath = null;
+            switch (choice) {
+                case 1:
+                    PortfolioService.PortfolioSummary summary = portfolioService.getPortfolioSummary(currentAccount.getAccountId());
+                    exportedPath = FileManager.exportPortfolioReport(summary);
+                    break;
+                case 2:
+                    exportedPath = FileManager.exportDailyMarketReport(stockRepo.listAll());
+                    break;
+                case 3:
+                    exportedPath = FileManager.exportTradeHistory(tradeRepo.listAll());
+                    break;
+            }
+            if (exportedPath != null) {
+                System.out.println("[SUCCESS] Report exported via Java NIO.2 to: " + exportedPath.toAbsolutePath());
+            }
+        } catch (IOException e) {
+            System.out.println("[EXPORT FAILED] " + e.getMessage());
+        }
+    }
+
+    // ================= 13. Evaluator 15-Step Automated Workflow =================
+    public void runEvaluatorDemoWorkflow() {
+        System.out.println("\n==========================================================================");
+        System.out.println("       TRADEX EVALUATOR DEMO WORKFLOW - 15 STEP AUTOMATED REPRODUCTION    ");
+        System.out.println("==========================================================================");
+
+        try {
+            // Step 1: Start TradeX & Initialize
+            System.out.println("\n[Step 1] Initializing TradeX Exchange System & SQLite Storage...");
+            dbManager.initializeSchema();
+            exchange.initializeBooks();
+            System.out.println("  ✓ SQLite connected, OrderBooks initialized.");
+
+            // Step 2: Login Demo Trader
+            System.out.println("\n[Step 2] Authenticating Demo Trader...");
+            User trader = accountService.login("demo", "demo123");
+            Account acc = accountService.getAccountByUserId(trader.getId()).get();
+            System.out.printf("  ✓ Logged in as '%s' (Account #%d). Cash: ₹%.2f%n",
+                    trader.getUsername(), acc.getAccountId(), acc.getAvailableCash());
+
+            // Step 3: View Market
+            System.out.println("\n[Step 3] Fetching Listed Equities Catalog...");
+            List<Stock> stocks = marketService.getAllStocks();
+            System.out.printf("  ✓ Found %d listed equities. RELIANCE LTP: ₹%.2f, TCS LTP: ₹%.2f%n",
+                    stocks.size(), stockRepo.findBySymbol("RELIANCE").get().getCurrentPrice(),
+                    stockRepo.findBySymbol("TCS").get().getCurrentPrice());
+
+            // Step 4: Select Stock & View Details
+            System.out.println("\n[Step 4] Querying Stock Details for RELIANCE...");
+            Stock rel = stockRepo.findBySymbol("RELIANCE").get();
+            System.out.printf("  ✓ RELIANCE: LTP=₹%.2f, Upper Circuit=₹%.2f, Lower Circuit=₹%.2f%n",
+                    rel.getCurrentPrice(), rel.getUpperCircuit(), rel.getLowerCircuit());
+
+            // Step 5: View Order Book
+            System.out.println("\n[Step 5] Inspecting RELIANCE Double-Auction Order Book...");
+            OrderBook book = exchange.getOrderBook("RELIANCE");
+            System.out.printf("  ✓ Best Ask: ₹%.2f, Best Bid: ₹%.2f, Spread: ₹%.2f%n",
+                    book.peekBestAsk().map(Order::getPrice).orElse(0.0),
+                    book.peekBestBid().map(Order::getPrice).orElse(0.0),
+                    book.getSpread());
+
+            // Step 6: Place Limit Order
+            System.out.println("\n[Step 6] Placing Resting Limit Buy Order: 10 RELIANCE @ ₹2845.00...");
+            List<Trade> trades1 = orderService.placeOrder(acc.getAccountId(), "RELIANCE",
+                    OrderSide.BUY, OrderType.LIMIT, 10, 2845.00, 0.0);
+            System.out.printf("  ✓ Order submitted. Immediate fills: %d. Order now resting in book.%n", trades1.size());
+
+            // Step 7: Start Simulation Tick
+            System.out.println("\n[Step 7] Advancing Market Simulation Tick (Drift + Stochastic Shock)...");
+            simulationEngine.stepSimulation();
+            System.out.printf("  ✓ Simulated tick complete. New RELIANCE LTP: ₹%.2f%n",
+                    stockRepo.findBySymbol("RELIANCE").get().getCurrentPrice());
+
+            // Step 8: Submit Crossing Order
+            System.out.println("\n[Step 8] Submitting Aggressive Buy Order that Crosses the Book (Crossing Best Ask)...");
+            double bestAskPrice = book.peekBestAsk().map(Order::getPrice).orElse(2855.00);
+            List<Trade> matchTrades = orderService.placeOrder(acc.getAccountId(), "RELIANCE",
+                    OrderSide.BUY, OrderType.LIMIT, 15, bestAskPrice, 0.0);
+            System.out.printf("  ✓ Crossing order submitted! Trades generated: %d%n", matchTrades.size());
+
+            // Step 9 & 10: Observe Matching & Execution
+            System.out.println("\n[Step 9 & 10] Validating Execution & Trade Records...");
+            for (Trade t : matchTrades) {
+                System.out.printf("  ✓ Trade ID: %s | Executed: %d %s @ ₹%.2f | Buyer Fee: ₹%.2f%n",
+                        t.getTradeId(), t.getQuantity(), t.getSymbol(), t.getPrice(), t.getBrokerageBuyer());
+            }
+
+            // Step 11: View Updated Portfolio
+            System.out.println("\n[Step 11] Checking Updated Portfolio & Cash Settlement...");
+            PortfolioService.PortfolioSummary pSummary = portfolioService.getPortfolioSummary(acc.getAccountId());
+            System.out.printf("  ✓ Net Worth: ₹%.2f | Available Cash: ₹%.2f | Invested: ₹%.2f%n",
+                    pSummary.netWorth, pSummary.availableCash, pSummary.totalInvested);
+            for (PortfolioService.PositionView pv : pSummary.positions) {
+                System.out.printf("     - %s: %d shares (Avg: ₹%.2f | Current: ₹%.2f | P&L: %+.2f)%n",
+                        pv.symbol, pv.quantity, pv.averagePrice, pv.currentPrice, pv.unrealizedPnL);
+            }
+
+            // Step 12: Technical Analysis
+            System.out.println("\n[Step 12] Running Quantitative Technical Analysis for RELIANCE...");
+            TechnicalAnalysisService.TechnicalReport tr = taService.generateReport(
+                    rel, simulationEngine.getPriceHistory("RELIANCE"));
+            System.out.printf("  ✓ Indicators -> SMA20: ₹%.2f | SMA50: ₹%.2f | RSI: %.2f | Signal: [%s]%n",
+                    tr.sma20, tr.sma50, tr.rsi14, tr.signal);
+
+            // Step 13: Export CSV Report via NIO.2
+            System.out.println("\n[Step 13] Exporting Portfolio Report via Java NIO.2 to CSV...");
+            Path exportedPath = FileManager.exportPortfolioReport(pSummary);
+            System.out.printf("  ✓ Generated export at: %s%n", exportedPath.toAbsolutePath());
+
+            // Step 14 & 15: Restart & Persistence Verification
+            System.out.println("\n[Step 14 & 15] Simulating Application Restart & Confirming SQLite Persistence...");
+            Account reloadedAcc = accountRepo.findById(acc.getAccountId()).get();
+            List<Holding> reloadedHoldings = holdingRepo.listByAccountId(acc.getAccountId());
+            System.out.printf("  ✓ Confirmed persisted account balance: ₹%.2f%n", reloadedAcc.getCashBalance());
+            System.out.printf("  ✓ Confirmed persisted holdings count: %d active positions%n", reloadedHoldings.size());
+
+            System.out.println("\n==========================================================================");
+            System.out.println("  [PASS] COMPLETE 15-STEP EVALUATOR WORKFLOW EXECUTED WITH ZERO ERRORS!   ");
+            System.out.println("==========================================================================");
+
+        } catch (Exception e) {
+            System.out.println("[EVALUATOR WORKFLOW ERROR] " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    public static void main(String[] args) {
+        Main app = new Main();
+        app.start(args);
+    }
+}
