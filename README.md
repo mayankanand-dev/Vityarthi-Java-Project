@@ -187,15 +187,29 @@ All configuration parameters (e.g. brokerage rates, circuit band percentages, da
 
 ## 13. How to Build & Run
 
-### On Windows:
-Compile and build the standalone executable JAR:
+### On Windows (PowerShell or Command Prompt):
+In **PowerShell** (prefix scripts with `.\`):
+```powershell
+# Build standalone tradex.jar
+.\build.bat
+# (or: .\build.ps1)
+
+# Run interactive CLI
+.\run.bat
+# (or: .\run.ps1)
+
+# Run automated tests
+.\test.bat
+# (or: .\test.ps1)
+```
+
+In standard **Command Prompt (CMD)**:
 ```cmd
 build.bat
-```
-Run the application:
-```cmd
 run.bat
+test.bat
 ```
+
 Or execute directly using standard Java:
 ```cmd
 java -jar tradex.jar
@@ -206,6 +220,7 @@ java -jar tradex.jar
 chmod +x build.sh run.sh test.sh
 ./build.sh
 ./run.sh
+./test.sh
 ```
 
 ---
