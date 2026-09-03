@@ -293,15 +293,17 @@ public class Main {
     // ================= 1. Market Overview =================
     private void displayMarketOverview() {
         List<Stock> stocks = marketService.getAllStocks();
-        System.out.println("+----------+------------------------------+---------------------+------------+------------+-----------+------------+");
-        System.out.println("| SYMBOL   | COMPANY NAME                 | SECTOR              |    LTP(Rs) |    CHG(Rs) |    CHG(%) |     VOLUME |");
-        System.out.println("+----------+------------------------------+---------------------+------------+------------+-----------+------------+");
+        String div = "+------------+--------------------------------+--------------------------+--------------+--------------+------------+--------------+";
+        System.out.println(div);
+        System.out.printf("| %-10s | %-30s | %-24s | %12s | %12s | %10s | %12s |%n",
+                "SYMBOL", "COMPANY NAME", "SECTOR", "LTP (Rs)", "CHG (Rs)", "CHG (%)", "VOLUME");
+        System.out.println(div);
         for (Stock s : stocks) {
-            System.out.printf("| %-8s | %-28s | %-19s | %10.2f | %+10.2f | %+8.2f%% | %10d |%n",
+            System.out.printf("| %-10s | %-30s | %-24s | %12.2f | %+12.2f | %+9.2f%% | %12d |%n",
                     s.getSymbol(), s.getName(), s.getSector(),
                     s.getCurrentPrice(), s.getChangeAmount(), s.getChangePercentage(), s.getVolume());
         }
-        System.out.println("+----------+------------------------------+---------------------+------------+------------+-----------+------------+");
+        System.out.println(div);
     }
 
     // ================= 2. Stock Quote Details =================
@@ -348,36 +350,50 @@ public class Main {
         List<OrderBook.LevelDepth> asks = book.getAsksDepth(5);
         List<OrderBook.LevelDepth> bids = book.getBidsDepth(5);
 
-        System.out.println("\n+------------------------------------------------------------------------------+");
-        System.out.printf("|                         %-10s ORDER BOOK & DEPTH                            |%n", symbol);
-        System.out.printf("| LTP: Rs. %-15.2f | Spread: Rs. %-14.2f | Status: %-14s |%n",
+        String div65 = "+---------------------------------------------------------------+";
+        String tableDiv = "+--------+------------------+------------------+----------------+";
+
+        System.out.println("\n" + div65);
+        System.out.printf("| %-61s |%n", center(symbol + " ORDER BOOK & DEPTH", 61));
+        System.out.printf("| LTP: Rs. %-11.2f | Spread: Rs. %-9.2f | Status: %-13s |%n",
                 stock.getCurrentPrice(), book.getSpread(), stock.getStatus());
-        System.out.println("+------------------------------------------------------------------------------+");
-        System.out.println("| ASKS (Sellers)                                                               |");
-        System.out.println("|           Price (Rs)       |            Quantity |                    Orders |");
-        System.out.println("| -------------------------- | ------------------- | ------------------------- |");
+        System.out.println(div65);
+        System.out.printf("| %-61s |%n", "ASKS (Sellers)");
+        System.out.println(tableDiv);
+        System.out.printf("| %-6s | %16s | %16s | %14s |%n", "LEVEL", "PRICE (Rs)", "QUANTITY", "ORDERS");
+        System.out.println(tableDiv);
         if (asks.isEmpty()) {
-            System.out.println("|           [No resting sell orders currently available]                       |");
+            System.out.printf("| %-61s |%n", center("[No resting sell orders]", 61));
         } else {
             for (int i = asks.size() - 1; i >= 0; i--) {
                 OrderBook.LevelDepth lvl = asks.get(i);
-                System.out.printf("|              %10.2f        |          %10d |                %10d |%n",
-                        lvl.price, lvl.totalQuantity, lvl.orderCount);
+                System.out.printf("| %-6d | %16.2f | %16d | %14d |%n",
+                        (i + 1), lvl.price, lvl.totalQuantity, lvl.orderCount);
             }
         }
-        System.out.println("+------------------------------------------------------------------------------+");
-        System.out.println("| BIDS (Buyers)                                                                |");
-        System.out.println("|           Price (Rs)       |            Quantity |                    Orders |");
-        System.out.println("| -------------------------- | ------------------- | ------------------------- |");
+        System.out.println(tableDiv);
+        System.out.printf("| %-61s |%n", "BIDS (Buyers)");
+        System.out.println(tableDiv);
+        System.out.printf("| %-6s | %16s | %16s | %14s |%n", "LEVEL", "PRICE (Rs)", "QUANTITY", "ORDERS");
+        System.out.println(tableDiv);
         if (bids.isEmpty()) {
-            System.out.println("|           [No resting buy orders currently available]                        |");
+            System.out.printf("| %-61s |%n", center("[No resting buy orders]", 61));
         } else {
-            for (OrderBook.LevelDepth lvl : bids) {
-                System.out.printf("|              %10.2f        |          %10d |                %10d |%n",
-                        lvl.price, lvl.totalQuantity, lvl.orderCount);
+            for (int i = 0; i < bids.size(); i++) {
+                OrderBook.LevelDepth lvl = bids.get(i);
+                System.out.printf("| %-6d | %16.2f | %16d | %14d |%n",
+                        (i + 1), lvl.price, lvl.totalQuantity, lvl.orderCount);
             }
         }
-        System.out.println("+------------------------------------------------------------------------------+");
+        System.out.println(tableDiv);
+    }
+
+    private static String center(String s, int width) {
+        if (s == null) s = "";
+        if (s.length() >= width) return s.substring(0, width);
+        int pad = (width - s.length()) / 2;
+        int rem = width - s.length() - pad;
+        return " ".repeat(pad) + s + " ".repeat(rem);
     }
 
     // ================= 4. Place Order =================

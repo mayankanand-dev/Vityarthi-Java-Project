@@ -215,43 +215,45 @@ chmod +x build.sh run.sh test.sh
 ### 1. View Listed Stocks (Market Overview)
 Select Option `1` from the main menu:
 ```text
----------------------------------------------------------------------------------------------------------
-SYMBOL     NAME                         SECTOR             LTP (₹)    CHG (₹)    CHG (%)       VOLUME
----------------------------------------------------------------------------------------------------------
-HCLTECH    HCL Technologies Ltd         Information Tech   1720.00      +0.00     +0.00%            0
-HDFCBANK   HDFC Bank Limited            Banking & Financ   1640.00      +0.00     +0.00%            0
-ICICIBANK  ICICI Bank Limited           Banking & Financ   1180.00      +0.00     +0.00%            0
-INFY       Infosys Limited              Information Tech   1780.00      +0.00     +0.00%            0
-ITC        ITC Limited                  FMCG & Conglomer    495.00      +0.00     +0.00%            0
-LT         Larsen & Toubro Ltd          Engineering & In   3620.00      +0.00     +0.00%            0
-RELIANCE   Reliance Industries Ltd      Energy & Retail    2850.00      +0.00     +0.00%            0
-SBIN       State Bank of India          Banking & Financ    815.00      +0.00     +0.00%            0
-TCS        Tata Consultancy Services    Information Tech   4120.00      +0.00     +0.00%            0
-WIPRO      Wipro Limited                Information Tech    530.00      +0.00     +0.00%            0
----------------------------------------------------------------------------------------------------------
++------------+--------------------------------+--------------------------+--------------+--------------+------------+--------------+
+| SYMBOL     | COMPANY NAME                   | SECTOR                   |     LTP (Rs) |     CHG (Rs) |    CHG (%) |       VOLUME |
++------------+--------------------------------+--------------------------+--------------+--------------+------------+--------------+
+| HCLTECH    | HCL Technologies Ltd           | Information Technology   |      1720.00 |        +0.00 |     +0.00% |            0 |
+| HDFCBANK   | HDFC Bank Limited              | Banking & Finance        |      1640.00 |        +0.00 |     +0.00% |            0 |
+| ICICIBANK  | ICICI Bank Limited             | Banking & Finance        |      1180.00 |        +0.00 |     +0.00% |            0 |
+| INFY       | Infosys Limited                | Information Technology   |      1780.00 |        +0.00 |     +0.00% |            0 |
+| ITC        | ITC Limited                    | FMCG & Conglomerate      |       495.00 |        +0.00 |     +0.00% |            0 |
+| LT         | Larsen & Toubro Ltd            | Engineering & Infra      |      3620.00 |        +0.00 |     +0.00% |            0 |
+| RELIANCE   | Reliance Industries Ltd        | Energy & Retail          |      2850.00 |        +0.00 |     +0.00% |            0 |
+| SBIN       | State Bank of India            | Banking & Finance        |       815.00 |        +0.00 |     +0.00% |            0 |
+| TCS        | Tata Consultancy Services      | Information Technology   |      4120.00 |        +0.00 |     +0.00% |            0 |
+| WIPRO      | Wipro Limited                  | Information Technology   |       530.00 |        +0.00 |     +0.00% |            0 |
++------------+--------------------------------+--------------------------+--------------+--------------+------------+--------------+
 ```
 
 ### 2. View Order Book & Market Depth
 Select Option `3` and enter `RELIANCE`:
 ```text
-╔══════════════════════════════════════════════════════╗
-║              RELIANCE ORDER BOOK & DEPTH             ║
-║  LTP: ₹2850.00   | Spread: ₹10.00   | Status: OPEN   ║
-╠══════════════════════════════════════════════════════╣
-║ ASKS (Sellers)                                       ║
-║   Price (₹)      Quantity       Orders               ║
-║   ------------------------------------------------   ║
-║   ₹2860.00       120            1                    ║
-║   ₹2855.00       300            1                    ║
-║   ₹2850.00       180            1                    ║
-╠══════════════════════════════════════════════════════╣
-║ BIDS (Buyers)                                        ║
-║   Price (₹)      Quantity       Orders               ║
-║   ------------------------------------------------   ║
-║   ₹2840.00       250            1                    ║
-║   ₹2835.00       410            1                    ║
-║   ₹2830.00       175            1                    ║
-╚══════════════════════════════════════════════════════╝
++---------------------------------------------------------------+
+|                  RELIANCE ORDER BOOK & DEPTH                  |
+| LTP: Rs. 2850.00      | Spread: Rs. 10.00     | Status: OPEN   |
++---------------------------------------------------------------+
+| ASKS (Sellers)                                                |
++--------+------------------+------------------+----------------+
+| LEVEL  |       PRICE (Rs) |         QUANTITY |         ORDERS |
++--------+------------------+------------------+----------------+
+| 3      |          2860.00 |              120 |              1 |
+| 2      |          2855.00 |              300 |              1 |
+| 1      |          2850.00 |              180 |              1 |
++--------+------------------+------------------+----------------+
+| BIDS (Buyers)                                                 |
++--------+------------------+------------------+----------------+
+| LEVEL  |       PRICE (Rs) |         QUANTITY |         ORDERS |
++--------+------------------+------------------+----------------+
+| 1      |          2840.00 |              250 |              1 |
+| 2      |          2835.00 |              410 |              1 |
+| 3      |          2830.00 |              175 |              1 |
++--------+------------------+------------------+----------------+
 ```
 
 ---

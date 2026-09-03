@@ -114,19 +114,21 @@ public class TerminalScreenshotGenerator {
         m1.add("Select option (1-15): _");
         renderTerminalImage("01-main-menu.png", "TradeX CLI - Terminal Dashboard", String.join("\n", m1));
 
-        // 2. Market View (Width: 116)
+        // 2. Market View (Width: 132)
         List<String> m2 = new ArrayList<>();
         m2.add("Select option (1-15): 1");
         m2.add("");
-        m2.add("+----------+------------------------------+---------------------+------------+------------+-----------+------------+");
-        m2.add("| SYMBOL   | COMPANY NAME                 | SECTOR              |    LTP(Rs) |    CHG(Rs) |    CHG(%) |     VOLUME |");
-        m2.add("+----------+------------------------------+---------------------+------------+------------+-----------+------------+");
+        String div132 = "+------------+--------------------------------+--------------------------+--------------+--------------+------------+--------------+";
+        m2.add(div132);
+        m2.add(String.format("| %-10s | %-30s | %-24s | %12s | %12s | %10s | %12s |",
+                "SYMBOL", "COMPANY NAME", "SECTOR", "LTP (Rs)", "CHG (Rs)", "CHG (%)", "VOLUME"));
+        m2.add(div132);
         for (Stock s : marketService.getAllStocks()) {
-            m2.add(String.format("| %-8s | %-28s | %-19s | %10.2f | %+10.2f | %+8.2f%% | %10d |",
+            m2.add(String.format("| %-10s | %-30s | %-24s | %12.2f | %+12.2f | %+9.2f%% | %12d |",
                     s.getSymbol(), s.getName(), s.getSector(),
                     s.getCurrentPrice(), s.getChangeAmount(), s.getChangePercentage(), s.getVolume()));
         }
-        m2.add("+----------+------------------------------+---------------------+------------+------------+-----------+------------+");
+        m2.add(div132);
         renderTerminalImage("02-market-view.png", "TradeX CLI - Listed Equities Overview", String.join("\n", m2));
 
         // 3. Order Placement (Width: 80)
@@ -149,32 +151,43 @@ public class TerminalScreenshotGenerator {
         m3.add("Available Cash Reserved: Rs. 71,125.00 | Remaining Available Cash: Rs. 886,103.63");
         renderTerminalImage("03-order-placement.png", "TradeX CLI - Order Placement & Risk Controls", String.join("\n", m3));
 
-        // 4. Order Book & Market Depth (Width: 80)
-        int w4 = 80;
+        // 4. Order Book & Market Depth (Width: 65)
         OrderBook relBook = exchange.getOrderBook("RELIANCE");
         List<String> m4 = new ArrayList<>();
         m4.add("Select option (1-15): 3");
         m4.add("Enter Stock Symbol: RELIANCE");
         m4.add("");
-        m4.add(divider(w4));
-        m4.add(boxLine(center("RELIANCE ORDER BOOK & DEPTH", w4 - 4), w4));
-        m4.add(boxLine(center(String.format("LTP: Rs. %.2f   |   Spread: Rs. %.2f   |   Status: OPEN", 2850.00, relBook.getSpread()), w4 - 4), w4));
-        m4.add(divider(w4));
-        m4.add(boxLine("ASKS (Sellers)", w4));
-        m4.add("| " + padLeft("Price (Rs)", 24) + " | " + padLeft("Quantity", 24) + " | " + padLeft("Orders", 24) + " |");
-        m4.add("| " + "-".repeat(24) + " | " + "-".repeat(24) + " | " + "-".repeat(24) + " |");
-        for (int i = relBook.getAsksDepth(5).size() - 1; i >= 0; i--) {
-            OrderBook.LevelDepth lvl = relBook.getAsksDepth(5).get(i);
-            m4.add(String.format("| %24.2f | %24d | %24d |", lvl.price, lvl.totalQuantity, lvl.orderCount));
+        String div65 = "+---------------------------------------------------------------+";
+        String tableDiv = "+--------+------------------+------------------+----------------+";
+        m4.add(div65);
+        m4.add("| " + center("RELIANCE ORDER BOOK & DEPTH", 61) + " |");
+        m4.add(String.format("| %-19s | %-20s | %-16s |",
+                String.format("LTP: Rs. %.2f", 2850.00),
+                String.format("Spread: Rs. %.2f", relBook.getSpread()),
+                "Status: OPEN"));
+        m4.add(div65);
+        m4.add(String.format("| %-61s |", "ASKS (Sellers)"));
+        m4.add(tableDiv);
+        m4.add(String.format("| %-6s | %16s | %16s | %14s |", "LEVEL", "PRICE (Rs)", "QUANTITY", "ORDERS"));
+        m4.add(tableDiv);
+        List<OrderBook.LevelDepth> asks = relBook.getAsksDepth(5);
+        for (int i = asks.size() - 1; i >= 0; i--) {
+            OrderBook.LevelDepth lvl = asks.get(i);
+            m4.add(String.format("| %-6d | %16.2f | %16d | %14d |",
+                    (i + 1), lvl.price, lvl.totalQuantity, lvl.orderCount));
         }
-        m4.add(divider(w4));
-        m4.add(boxLine("BIDS (Buyers)", w4));
-        m4.add("| " + padLeft("Price (Rs)", 24) + " | " + padLeft("Quantity", 24) + " | " + padLeft("Orders", 24) + " |");
-        m4.add("| " + "-".repeat(24) + " | " + "-".repeat(24) + " | " + "-".repeat(24) + " |");
-        for (OrderBook.LevelDepth lvl : relBook.getBidsDepth(5)) {
-            m4.add(String.format("| %24.2f | %24d | %24d |", lvl.price, lvl.totalQuantity, lvl.orderCount));
+        m4.add(tableDiv);
+        m4.add(String.format("| %-61s |", "BIDS (Buyers)"));
+        m4.add(tableDiv);
+        m4.add(String.format("| %-6s | %16s | %16s | %14s |", "LEVEL", "PRICE (Rs)", "QUANTITY", "ORDERS"));
+        m4.add(tableDiv);
+        List<OrderBook.LevelDepth> bids = relBook.getBidsDepth(5);
+        for (int i = 0; i < bids.size(); i++) {
+            OrderBook.LevelDepth lvl = bids.get(i);
+            m4.add(String.format("| %-6d | %16.2f | %16d | %14d |",
+                    (i + 1), lvl.price, lvl.totalQuantity, lvl.orderCount));
         }
-        m4.add(divider(w4));
+        m4.add(tableDiv);
         renderTerminalImage("04-order-book.png", "TradeX CLI - In-Memory Double Auction Order Book", String.join("\n", m4));
 
         // 5. Trade Execution (Width: 96)
