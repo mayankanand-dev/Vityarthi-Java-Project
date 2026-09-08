@@ -17,23 +17,6 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * Automated test suite executing all 14 mandatory business and architectural validation tests:
- * 1. Valid market order execution
- * 2. Invalid order quantity rejection
- * 3. Insufficient funds rejection
- * 4. Insufficient holdings rejection
- * 5. Limit-order price cross matching
- * 6. Partial order fill tracking
- * 7. Strict Price-Time priority matching in OrderBook
- * 8. Order cancellation and margin release
- * 9. Cash deduction and credit during settlement
- * 10. Holdings quantity and weighted average acquisition cost settlement
- * 11. Concurrent multi-threaded transaction and balance consistency
- * 12. Quantitative technical indicator computation (SMA, RSI)
- * 13. SQLite JDBC persistence and relational CRUD
- * 14. Java NIO.2 file export validation
- */
 public class TestRunner {
     private static int passed = 0;
     private static int failed = 0;
@@ -116,11 +99,11 @@ public class TestRunner {
         // 3. Insufficient Funds
         runTest("Test 03: Insufficient Funds Validation", () -> {
             User u = userRepo.save(new User("poor_buyer", "hash", "TRADER"));
-            Account a = accountRepo.save(new Account(u.getId(), 100.0)); // Only ₹100
+            Account a = accountRepo.save(new Account(u.getId(), 100.0)); // Only Rs.100
 
             boolean caught = false;
             try {
-                // Wants to buy ₹10,000 worth
+                // Wants to buy Rs.10,000 worth
                 Order order = new Order.Builder()
                         .accountId(a.getAccountId()).symbol("TEST1").side(OrderSide.BUY)
                         .type(OrderType.LIMIT).quantity(100).price(100.00).build();
@@ -160,18 +143,18 @@ public class TestRunner {
             Account a2 = accountRepo.save(new Account(u2.getId(), 50000.0));
             holdingRepo.saveOrUpdate(new Holding(a2.getAccountId(), "TEST_LIM", 100, 95.00));
 
-            // Seller asks ₹102.00
+            // Seller asks Rs.102.00
             exchange.submitOrder(new Order.Builder()
                     .accountId(a2.getAccountId()).symbol("TEST_LIM").side(OrderSide.SELL)
                     .type(OrderType.LIMIT).quantity(25).price(102.00).build());
 
-            // Buyer bids ₹103.00 (crosses book!)
+            // Buyer bids Rs.103.00 (crosses book!)
             List<Trade> trades = exchange.submitOrder(new Order.Builder()
                     .accountId(a1.getAccountId()).symbol("TEST_LIM").side(OrderSide.BUY)
                     .type(OrderType.LIMIT).quantity(25).price(103.00).build());
 
             assertTrue(trades.size() == 1, "Expected 1 matching trade");
-            assertTrue(trades.get(0).getPrice() == 102.00, "Execution price should be resting ask price ₹102.00");
+            assertTrue(trades.get(0).getPrice() == 102.00, "Execution price should be resting ask price Rs.102.00");
             assertTrue(trades.get(0).getQuantity() == 25, "Trade quantity should be 25");
         });
 
