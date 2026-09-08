@@ -6,13 +6,10 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-/**
- * Singleton database manager providing centralized JDBC connection lifecycle
- * and automatic schema initialization for the SQLite storage engine.
- */
+
 public class DatabaseManager {
-    private static volatile DatabaseManager instance;
-    private final String dbUrl;
+    static volatile DatabaseManager instance;
+    String dbUrl;
 
     static {
         try {
@@ -39,9 +36,7 @@ public class DatabaseManager {
         return instance;
     }
 
-    /**
-     * Initializes an in-memory or custom-path database instance (primarily for automated unit tests).
-     */
+    
     public static synchronized DatabaseManager initializeCustom(String customJdbcUrl) {
         instance = new DatabaseManager(customJdbcUrl);
         return instance;
@@ -175,9 +170,7 @@ public class DatabaseManager {
         }
     }
 
-    /**
-     * Drops and recreates all tables for a clean test or demo reset.
-     */
+    
     public void resetDatabase() {
         String[] dropStatements = {
                 "DROP TABLE IF EXISTS market_events;",
@@ -201,3 +194,4 @@ public class DatabaseManager {
         initializeSchema();
     }
 }
+
