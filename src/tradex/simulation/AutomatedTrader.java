@@ -13,18 +13,14 @@ import tradex.strategy.TradingStrategy;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Autonomous trading agent executing concurrently on background thread pools.
- * Interacts directly with the Exchange matching engine to simulate dynamic market activity.
- */
 public class AutomatedTrader implements Runnable {
-    private final String botName;
-    private final int botAccountId;
-    private final TradingStrategy strategy;
-    private final Exchange exchange;
-    private final StockRepository stockRepo;
-    private final AccountRepository accountRepo;
-    private final HoldingRepository holdingRepo;
+    String botName;
+    int botAccountId;
+    TradingStrategy strategy;
+    Exchange exchange;
+    StockRepository stockRepo;
+    AccountRepository accountRepo;
+    HoldingRepository holdingRepo;
 
     public AutomatedTrader(String botName, int botAccountId, TradingStrategy strategy,
                            Exchange exchange, StockRepository stockRepo,
@@ -38,31 +34,29 @@ public class AutomatedTrader implements Runnable {
         this.holdingRepo = holdingRepo;
     }
 
-    public String getBotName() {
-        return botName;
-    }
+    public String getBotName() { return botName; }
 
     @Override
     public void run() {
         try {
             Optional<Account> accOpt = accountRepo.findById(botAccountId);
-            if (accOpt.isEmpty()) return;
+            if (!accOpt.isPresent()) return;
             Account account = accOpt.get();
 
             List<Stock> stocks = stockRepo.listAll();
             if (stocks.isEmpty()) return;
 
-            // Pick a random stock or iterate over active stocks
             Stock stock = stocks.get((int) (Math.random() * stocks.size()));
             Optional<Holding> holdingOpt = holdingRepo.findByAccountAndSymbol(botAccountId, stock.getSymbol());
-            int currentHolding = holdingOpt.map(Holding::getQuantity).orElse(0);
+            int currentHolding = 0;
+            if (holdingOpt.isPresent()) currentHolding = holdingOpt.get().getQuantity();
 
             Optional<Order> orderOpt = strategy.evaluate(stock, botAccountId, account.getAvailableCash(), currentHolding);
             if (orderOpt.isPresent()) {
                 exchange.submitOrder(orderOpt.get());
             }
         } catch (Exception ignored) {
-            // Background bot errors should never crash the main simulation thread
+            // bot errors should not crash the simulation
         }
     }
 }

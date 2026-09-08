@@ -6,27 +6,20 @@ import tradex.model.Stock;
 import tradex.repository.StockRepository;
 
 import java.sql.SQLException;
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.*;
 
-/**
- * High-performance market simulation engine driven by a Geometric Brownian Motion
- * stochastic process, deterministic random seeds, macroeconomic news events,
- * and concurrent algorithmic bot agents.
- */
 public class MarketSimulationEngine {
-    private final Exchange exchange;
-    private final StockRepository stockRepo;
-    private final ScheduledExecutorService scheduler;
-    private final Random random;
-    private final List<AutomatedTrader> automatedTraders = new CopyOnWriteArrayList<>();
-    private final List<MarketEvent> newsHistory = new CopyOnWriteArrayList<>();
-    private final Map<String, List<Double>> historicalPrices = new ConcurrentHashMap<>();
-    private volatile boolean isRunning = false;
+    Exchange exchange;
+    StockRepository stockRepo;
+    ScheduledExecutorService scheduler;
+    Random random;
+    List<AutomatedTrader> automatedTraders = new CopyOnWriteArrayList<>();
+    List<MarketEvent> newsHistory = new CopyOnWriteArrayList<>();
+    Map<String, List<Double>> historicalPrices = new ConcurrentHashMap<>();
+    volatile boolean isRunning = false;
 
-    // News headlines catalog for realistic event injection
-    private static final String[][] NEWS_CATALOG = {
+    static final String[][] NEWS_CATALOG = {
             {"Reliance announces record quarterly net profit, beating estimates", "RELIANCE", "BULLISH", "2.8"},
             {"TCS secures mega multi-year $1.5B cloud transformation contract", "TCS", "BULLISH", "2.2"},
             {"Infosys lowers annual revenue growth guidance amidst global tech slowdown", "INFY", "BEARISH", "-2.5"},
@@ -44,7 +37,11 @@ public class MarketSimulationEngine {
     public MarketSimulationEngine(Exchange exchange, StockRepository stockRepo, Long seed) {
         this.exchange = exchange;
         this.stockRepo = stockRepo;
-        this.random = seed != null ? new Random(seed) : new Random();
+        if (seed != null) {
+            this.random = new Random(seed);
+        } else {
+            this.random = new Random();
+        }
         this.scheduler = Executors.newScheduledThreadPool(4);
         initializePriceHistory();
     }
@@ -56,8 +53,8 @@ public class MarketSimulationEngine {
     private void initializePriceHistory() {
         for (Stock s : stockRepo.listAll()) {
             List<Double> history = new ArrayList<>();
-            // Generate synthetic 50-day preceding history around previous close
             double base = s.getPreviousClose();
+            // generate 50 historical prices for technical indicator calculations
             for (int i = 0; i < 50; i++) {
                 double drift = (random.nextDouble() - 0.49) * 0.015;
                 base = Math.max(10.0, base * (1.0 + drift));
@@ -68,30 +65,15 @@ public class MarketSimulationEngine {
         }
     }
 
-    public void registerTrader(AutomatedTrader trader) {
-        automatedTraders.add(trader);
-    }
-
-    public List<AutomatedTrader> getRegisteredTraders() {
-        return Collections.unmodifiableList(automatedTraders);
-    }
-
-    public List<Double> getPriceHistory(String symbol) {
-        return historicalPrices.getOrDefault(symbol.toUpperCase(), Collections.emptyList());
-    }
-
-    public List<MarketEvent> getNewsHistory() {
-        return Collections.unmodifiableList(newsHistory);
-    }
+    public void registerTrader(AutomatedTrader trader) { automatedTraders.add(trader); }
+    public List<AutomatedTrader> getRegisteredTraders() { return Collections.unmodifiableList(automatedTraders); }
+    public List<Double> getPriceHistory(String symbol) { return historicalPrices.getOrDefault(symbol.toUpperCase(), Collections.emptyList()); }
+    public List<MarketEvent> getNewsHistory() { return Collections.unmodifiableList(newsHistory); }
 
     public synchronized void startContinuousSimulation(long intervalMs) {
         if (isRunning) return;
         isRunning = true;
-
-        // Schedule periodic price tick & bot executions
         scheduler.scheduleAtFixedRate(this::tick, 1000, intervalMs, TimeUnit.MILLISECONDS);
-
-        // Schedule random news events every 20-30 ticks
         scheduler.scheduleAtFixedRate(this::triggerRandomNewsEvent, 10000, 25000, TimeUnit.MILLISECONDS);
     }
 
@@ -100,24 +82,14 @@ public class MarketSimulationEngine {
         scheduler.shutdown();
     }
 
-    public boolean isRunning() {
-        return isRunning;
-    }
+    public boolean isRunning() { return isRunning; }
 
-    /**
-     * Executes a single discrete simulation step:
-     * 1. Updates stock price drifts using Geometric Brownian Motion.
-     * 2. Executes automated trader bots.
-     */
-    public synchronized void stepSimulation() {
-        tick();
-    }
+    public synchronized void stepSimulation() { tick(); }
 
     private void tick() {
         List<Stock> stocks = stockRepo.listAll();
         for (Stock stock : stocks) {
-            // Geometric Brownian Motion step: dS = S * (mu*dt + sigma*dW)
-            // Daily drift mu ~ 0.0002, volatility sigma ~ 0.008
+            // GBM price drift: small random walk each tick
             double drift = 0.0001;
             double volatility = 0.006;
             double shock = random.nextGaussian();
@@ -125,34 +97,28 @@ public class MarketSimulationEngine {
 
             double currentPrice = stock.getCurrentPrice();
             double newPrice = Math.round((currentPrice * (1.0 + pctChange)) * 20.0) / 20.0;
-
-            // Constrain strictly within circuit limits
             newPrice = Math.min(stock.getUpperCircuit(), Math.max(stock.getLowerCircuit(), newPrice));
 
             long simulatedTickVolume = 5 + random.nextInt(40);
             stock.updatePrice(newPrice, simulatedTickVolume);
 
-            // Record into historical series
-            List<Double> history = historicalPrices.computeIfAbsent(stock.getSymbol(), k -> new ArrayList<>());
-            history.add(newPrice);
-            if (history.size() > 100) {
-                history.remove(0);
+            if (!historicalPrices.containsKey(stock.getSymbol())) {
+                historicalPrices.put(stock.getSymbol(), new ArrayList<>());
             }
+            List<Double> history = historicalPrices.get(stock.getSymbol());
+            history.add(newPrice);
+            if (history.size() > 100) history.remove(0);
 
             try {
                 stockRepo.updatePriceAndVolume(stock);
             } catch (SQLException ignored) {}
         }
 
-        // Trigger bot strategy evaluations
         for (AutomatedTrader bot : automatedTraders) {
             bot.run();
         }
     }
 
-    /**
-     * Injects a market news event and applies immediate directional impact.
-     */
     public synchronized MarketEvent triggerRandomNewsEvent() {
         int idx = random.nextInt(NEWS_CATALOG.length);
         String[] meta = NEWS_CATALOG[idx];
@@ -165,26 +131,23 @@ public class MarketSimulationEngine {
         newsHistory.add(0, event);
         if (newsHistory.size() > 50) newsHistory.remove(newsHistory.size() - 1);
 
-        // Apply impact
         if (symbol != null) {
-            stockRepo.findBySymbol(symbol).ifPresent(s -> {
+            Optional<Stock> stockOpt = stockRepo.findBySymbol(symbol);
+            if (stockOpt.isPresent()) {
+                Stock s = stockOpt.get();
                 double target = Math.round((s.getCurrentPrice() * (1.0 + (impactPct / 100.0))) * 20.0) / 20.0;
                 target = Math.min(s.getUpperCircuit(), Math.max(s.getLowerCircuit(), target));
                 s.updatePrice(target, 50);
-                try {
-                    stockRepo.updatePriceAndVolume(s);
-                } catch (SQLException ignored) {}
-            });
+                try { stockRepo.updatePriceAndVolume(s); } catch (SQLException ignored) {}
+            }
         } else {
-            // Broad market event: impacts all stocks moderately
+            // broad market event affects all stocks
             for (Stock s : stockRepo.listAll()) {
                 double broadImpact = (impactPct * 0.4) + ((random.nextDouble() - 0.5) * 0.5);
                 double target = Math.round((s.getCurrentPrice() * (1.0 + (broadImpact / 100.0))) * 20.0) / 20.0;
                 target = Math.min(s.getUpperCircuit(), Math.max(s.getLowerCircuit(), target));
                 s.updatePrice(target, 20);
-                try {
-                    stockRepo.updatePriceAndVolume(s);
-                } catch (SQLException ignored) {}
+                try { stockRepo.updatePriceAndVolume(s); } catch (SQLException ignored) {}
             }
         }
 

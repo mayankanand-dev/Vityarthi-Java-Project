@@ -7,11 +7,8 @@ import tradex.model.enums.OrderType;
 
 import java.util.Optional;
 
-/**
- * Mean Reversion Strategy: Assumes prices oscillate around opening levels.
- * Buys heavily when an asset is oversold relative to day open, sells when overbought.
- */
 public class MeanReversionStrategy implements TradingStrategy {
+
     @Override
     public String getName() {
         return "MEAN_REVERSION";
@@ -26,7 +23,6 @@ public class MeanReversionStrategy implements TradingStrategy {
         double devPct = ((current - open) / open) * 100.0;
 
         if (devPct < -2.5 && availableCash >= current * 10) {
-            // Price dropped significantly below day open -> Expect bounce back to mean
             double buyPrice = Math.round((current * 1.001) * 20.0) / 20.0;
             int qty = Math.min(30, (int) (availableCash / buyPrice));
             if (qty > 0) {
@@ -40,7 +36,6 @@ public class MeanReversionStrategy implements TradingStrategy {
                         .build());
             }
         } else if (devPct > 2.5 && currentShareHolding >= 5) {
-            // Price stretched far above day open -> Take profit before pullback
             double sellPrice = Math.round((current * 0.999) * 20.0) / 20.0;
             int qty = Math.min(currentShareHolding, 25);
             return Optional.of(new Order.Builder()
