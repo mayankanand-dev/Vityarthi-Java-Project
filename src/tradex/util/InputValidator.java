@@ -2,10 +2,7 @@ package tradex.util;
 
 import java.util.Scanner;
 
-/**
- * Defensive CLI input parser ensuring invalid or malformed user keystrokes
- * do not crash the terminal application.
- */
+
 public class InputValidator {
 
     public static int readInt(Scanner scanner, String prompt, int min, int max) {
@@ -61,3 +58,4 @@ public class InputValidator {
         }
     }
 }
+

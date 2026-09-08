@@ -18,13 +18,7 @@ import tradex.service.AccountService;
 
 import java.sql.SQLException;
 
-/**
- * Initializes realistic baseline seed data:
- * - 10 Indian bluechip equities across major sectors
- * - Default demo trader and administrator credentials
- * - Automated institutional and retail liquidity bot accounts
- * - Initial order book depth
- */
+
 public class DatabaseSeeder {
 
     public static void seed(DatabaseManager dbManager, Exchange exchange) {
@@ -65,7 +59,7 @@ public class DatabaseSeeder {
             if (userRepo.findByUsername("demo").isEmpty()) {
                 trader = new User("demo", AccountService.hashPassword("demo123"), "TRADER");
                 trader = userRepo.save(trader);
-                Account demoAcc = accountRepo.save(new Account(trader.getId(), 1000000.0)); // ₹10,00,000 initial capital
+                Account demoAcc = accountRepo.save(new Account(trader.getId(), 1000000.0)); // Rs.10,00,000 initial capital
 
                 // Give demo trader initial inventory in RELIANCE & TCS
                 holdingRepo.saveOrUpdate(new Holding(demoAcc.getAccountId(), "RELIANCE", 100, 2800.00));
@@ -77,7 +71,7 @@ public class DatabaseSeeder {
             Account botAccount;
             if (userRepo.findByUsername("liquidity_bot").isEmpty()) {
                 botUser = userRepo.save(new User("liquidity_bot", AccountService.hashPassword("botpass"), "TRADER"));
-                botAccount = accountRepo.save(new Account(botUser.getId(), 10000000.0)); // ₹1 Crore bot capital
+                botAccount = accountRepo.save(new Account(botUser.getId(), 10000000.0)); // Rs.1 Crore bot capital
 
                 // Seed ample holdings for the bot across all stocks so it can quote both bids and asks
                 for (Stock s : initialStocks) {
@@ -141,3 +135,4 @@ public class DatabaseSeeder {
         System.out.println("Seeding completed successfully!");
     }
 }
+

@@ -17,11 +17,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Utility that captures authentic execution output from the actual running
- * TradeX application components and renders crisp, high-fidelity terminal
- * window screenshots with mathematically exact character grid alignment.
- */
+
 public class TerminalScreenshotGenerator {
 
     public static String padRight(String s, int n) {
@@ -370,7 +366,7 @@ public class TerminalScreenshotGenerator {
         System.out.println("All 10 authentic screenshots successfully regenerated with pixel-perfect alignment!");
     }
 
-    private static void renderTerminalImage(String filename, String title, String consoleText) {
+    static void renderTerminalImage(String filename, String title, String consoleText) {
         String[] lines = consoleText.split("\n");
         int maxLineLen = 0;
         for (String l : lines) {
@@ -456,3 +452,4 @@ public class TerminalScreenshotGenerator {
         }
     }
 }
+

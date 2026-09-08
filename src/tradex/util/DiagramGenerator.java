@@ -7,14 +7,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 
-/**
- * Programmatic generator for high-resolution software architecture diagrams:
- * 1. Use Case Diagram
- * 2. Class Diagram
- * 3. Sequence Diagram
- * 4. Workflow Diagram
- * 5. Entity-Relationship (ER) Diagram
- */
+
 public class DiagramGenerator {
 
     public static void main(String[] args) {
@@ -31,14 +24,14 @@ public class DiagramGenerator {
         System.out.println("All 5 design diagrams rendered successfully!");
     }
 
-    private static void initGraphics(Graphics2D g) {
+    static void initGraphics(Graphics2D g) {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
     }
 
     // 1. Use Case Diagram
-    private static void generateUseCaseDiagram() {
+    static void generateUseCaseDiagram() {
         int w = 1100, h = 750;
         BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = img.createGraphics();
@@ -115,7 +108,7 @@ public class DiagramGenerator {
         saveImage(img, "docs/diagrams/use-case.png");
     }
 
-    private static void drawActor(Graphics2D g, int x, int y, String label) {
+    static void drawActor(Graphics2D g, int x, int y, String label) {
         g.setColor(new Color(30, 41, 59));
         g.setStroke(new BasicStroke(2.0f));
         // Head
@@ -134,7 +127,7 @@ public class DiagramGenerator {
         g.drawString(label, x - (fm.stringWidth(label) / 2), y + 54);
     }
 
-    private static void drawUseCaseBubble(Graphics2D g, int x, int y, int w, int h, String text) {
+    static void drawUseCaseBubble(Graphics2D g, int x, int y, int w, int h, String text) {
         g.setColor(Color.WHITE);
         g.fillRoundRect(x, y, w, h, 20, 20);
         g.setColor(new Color(203, 213, 225));
@@ -148,7 +141,7 @@ public class DiagramGenerator {
     }
 
     // 2. Class Diagram
-    private static void generateClassDiagram() {
+    static void generateClassDiagram() {
         int w = 1250, h = 850;
         BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = img.createGraphics();
@@ -228,7 +221,7 @@ public class DiagramGenerator {
         saveImage(img, "docs/diagrams/class-diagram.png");
     }
 
-    private static void drawClassBox(Graphics2D g, int x, int y, int w, int h, String name, String fields, String methods) {
+    static void drawClassBox(Graphics2D g, int x, int y, int w, int h, String name, String fields, String methods) {
         g.setColor(Color.WHITE);
         g.fillRoundRect(x, y, w, h, 8, 8);
         g.setColor(new Color(203, 213, 225));
@@ -270,7 +263,7 @@ public class DiagramGenerator {
     }
 
     // 3. Sequence Diagram
-    private static void generateSequenceDiagram() {
+    static void generateSequenceDiagram() {
         int w = 1150, h = 750;
         BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = img.createGraphics();
@@ -330,7 +323,7 @@ public class DiagramGenerator {
         saveImage(img, "docs/diagrams/sequence-diagram.png");
     }
 
-    private static void drawLifelineHeader(Graphics2D g, int x, int y, String label) {
+    static void drawLifelineHeader(Graphics2D g, int x, int y, String label) {
         int bw = 110, bh = 34;
         g.setColor(new Color(241, 245, 249));
         g.fillRoundRect(x - (bw / 2), y, bw, bh, 6, 6);
@@ -344,7 +337,7 @@ public class DiagramGenerator {
         g.drawString(label, x - (fm.stringWidth(label) / 2), y + 21);
     }
 
-    private static void drawMessageArrow(Graphics2D g, int x1, int x2, int y, String label) {
+    static void drawMessageArrow(Graphics2D g, int x1, int x2, int y, String label) {
         g.setColor(new Color(37, 99, 235));
         g.setStroke(new BasicStroke(1.5f));
         g.drawLine(x1, y, x2, y);
@@ -358,7 +351,7 @@ public class DiagramGenerator {
         g.drawString(label, Math.min(x1, x2) + 10, y - 5);
     }
 
-    private static void drawReturnArrow(Graphics2D g, int x1, int x2, int y, String label) {
+    static void drawReturnArrow(Graphics2D g, int x1, int x2, int y, String label) {
         g.setColor(new Color(16, 185, 129));
         g.setStroke(new BasicStroke(1.3f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{4, 4}, 0));
         g.drawLine(x1, y, x2, y);
@@ -372,7 +365,7 @@ public class DiagramGenerator {
     }
 
     // 4. Workflow Diagram
-    private static void generateWorkflowDiagram() {
+    static void generateWorkflowDiagram() {
         int w = 1100, h = 750;
         BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = img.createGraphics();
@@ -419,7 +412,7 @@ public class DiagramGenerator {
         saveImage(img, "docs/diagrams/workflow.png");
     }
 
-    private static void drawProcessNode(Graphics2D g, int x, int y, int w, int h, String text, Color bg, Color border) {
+    static void drawProcessNode(Graphics2D g, int x, int y, int w, int h, String text, Color bg, Color border) {
         g.setColor(bg);
         g.fillRoundRect(x, y, w, h, 10, 10);
         g.setColor(border);
@@ -438,7 +431,7 @@ public class DiagramGenerator {
     }
 
     // 5. ER Diagram
-    private static void generateERDiagram() {
+    static void generateERDiagram() {
         int w = 1200, h = 800;
         BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = img.createGraphics();
@@ -560,7 +553,7 @@ public class DiagramGenerator {
         saveImage(img, "docs/diagrams/er-diagram.png");
     }
 
-    private static void drawERTable(Graphics2D g, int x, int y, int w, int h, String name, String[] columns) {
+    static void drawERTable(Graphics2D g, int x, int y, int w, int h, String name, String[] columns) {
         g.setColor(Color.WHITE);
         g.fillRoundRect(x, y, w, h, 6, 6);
         g.setColor(new Color(203, 213, 225));
@@ -593,7 +586,7 @@ public class DiagramGenerator {
         }
     }
 
-    private static void saveImage(BufferedImage img, String path) {
+    static void saveImage(BufferedImage img, String path) {
         try {
             ImageIO.write(img, "png", new File(path));
         } catch (IOException e) {
@@ -601,3 +594,4 @@ public class DiagramGenerator {
         }
     }
 }
+

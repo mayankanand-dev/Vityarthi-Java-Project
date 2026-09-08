@@ -12,14 +12,11 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * File I/O manager implemented using Java NIO.2 (java.nio.file)
- * for CSV export generation, audit logs, and database backups.
- */
+
 public class FileManager {
-    private static final Path EXPORTS_DIR = Paths.get("exports");
-    private static final Path LOGS_DIR = Paths.get("logs");
-    private static final DateTimeFormatter FILE_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+    static final Path EXPORTS_DIR = Paths.get("exports");
+    static final Path LOGS_DIR = Paths.get("logs");
+    static final DateTimeFormatter FILE_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
 
     static {
         try {
@@ -104,3 +101,4 @@ public class FileManager {
         } catch (IOException ignored) {}
     }
 }
+
