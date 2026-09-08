@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Optional;
 
 public class HoldingRepository {
-    private final DatabaseManager dbManager;
+    DatabaseManager dbManager;
 
     public HoldingRepository(DatabaseManager dbManager) {
         this.dbManager = dbManager;
@@ -83,3 +83,4 @@ public class HoldingRepository {
         );
     }
 }
+

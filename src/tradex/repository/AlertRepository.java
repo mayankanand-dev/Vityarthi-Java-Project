@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class AlertRepository {
-    private final DatabaseManager dbManager;
+    DatabaseManager dbManager;
 
     public AlertRepository(DatabaseManager dbManager) {
         this.dbManager = dbManager;
@@ -98,3 +98,4 @@ public class AlertRepository {
         );
     }
 }
+

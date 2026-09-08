@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Optional;
 
 public class StockRepository {
-    private final DatabaseManager dbManager;
+    DatabaseManager dbManager;
 
     public StockRepository(DatabaseManager dbManager) {
         this.dbManager = dbManager;
@@ -116,3 +116,4 @@ public class StockRepository {
         );
     }
 }
+

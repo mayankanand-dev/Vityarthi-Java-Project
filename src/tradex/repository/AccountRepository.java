@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 public class AccountRepository {
-    private final DatabaseManager dbManager;
+    DatabaseManager dbManager;
 
     public AccountRepository(DatabaseManager dbManager) {
         this.dbManager = dbManager;
@@ -91,3 +91,4 @@ public class AccountRepository {
         );
     }
 }
+

@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class TransactionRepository {
-    private final DatabaseManager dbManager;
+    DatabaseManager dbManager;
 
     public TransactionRepository(DatabaseManager dbManager) {
         this.dbManager = dbManager;
@@ -63,3 +63,4 @@ public class TransactionRepository {
         );
     }
 }
+

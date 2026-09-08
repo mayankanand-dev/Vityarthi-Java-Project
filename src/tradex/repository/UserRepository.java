@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Optional;
 
 public class UserRepository {
-    private final DatabaseManager dbManager;
+    DatabaseManager dbManager;
 
     public UserRepository(DatabaseManager dbManager) {
         this.dbManager = dbManager;
@@ -97,3 +97,4 @@ public class UserRepository {
         );
     }
 }
+

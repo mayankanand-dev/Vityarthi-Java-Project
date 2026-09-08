@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Optional;
 
 public class OrderRepository {
-    private final DatabaseManager dbManager;
+    DatabaseManager dbManager;
 
     public OrderRepository(DatabaseManager dbManager) {
         this.dbManager = dbManager;
@@ -123,3 +123,4 @@ public class OrderRepository {
                 .build();
     }
 }
+

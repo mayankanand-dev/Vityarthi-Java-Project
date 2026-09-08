@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Optional;
 
 public class TradeRepository {
-    private final DatabaseManager dbManager;
+    DatabaseManager dbManager;
 
     public TradeRepository(DatabaseManager dbManager) {
         this.dbManager = dbManager;
@@ -110,3 +110,4 @@ public class TradeRepository {
         );
     }
 }
+
