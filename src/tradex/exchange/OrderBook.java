@@ -6,27 +6,21 @@ import tradex.model.enums.OrderSide;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-/**
- * In-memory double-auction Limit Order Book (LOB) for an individual equity symbol.
- * Maintained with strict Price-Time priority via dual PriorityQueues:
- * - Bids: Max-heap (highest price first; earlier timestamp breaks ties)
- * - Asks: Min-heap (lowest price first; earlier timestamp breaks ties)
- */
 public class OrderBook {
-    private final String symbol;
-    private final PriorityQueue<Order> bids;
-    private final PriorityQueue<Order> asks;
-    private final ReentrantReadWriteLock rwLock = new ReentrantReadWriteLock();
+    String symbol;
+    PriorityQueue<Order> bids; // buy orders - highest price first
+    PriorityQueue<Order> asks; // sell orders - lowest price first
+    ReentrantReadWriteLock rwLock = new ReentrantReadWriteLock();
 
-    // Comparator for Bids: Price DESC, Timestamp ASC
-    private static final Comparator<Order> BID_COMPARATOR = (o1, o2) -> {
+    // bids sorted by highest price first, then by time
+    static final Comparator<Order> BID_COMPARATOR = (o1, o2) -> {
         int priceComp = Double.compare(o2.getPrice(), o1.getPrice());
         if (priceComp != 0) return priceComp;
         return o1.getTimestamp().compareTo(o2.getTimestamp());
     };
 
-    // Comparator for Asks: Price ASC, Timestamp ASC
-    private static final Comparator<Order> ASK_COMPARATOR = (o1, o2) -> {
+    // asks sorted by lowest price first, then by time
+    static final Comparator<Order> ASK_COMPARATOR = (o1, o2) -> {
         int priceComp = Double.compare(o1.getPrice(), o2.getPrice());
         if (priceComp != 0) return priceComp;
         return o1.getTimestamp().compareTo(o2.getTimestamp());
@@ -38,9 +32,7 @@ public class OrderBook {
         this.asks = new PriorityQueue<>(ASK_COMPARATOR);
     }
 
-    public String getSymbol() {
-        return symbol;
-    }
+    public String getSymbol() { return symbol; }
 
     public void addOrder(Order order) {
         rwLock.writeLock().lock();
@@ -59,9 +51,7 @@ public class OrderBook {
         rwLock.writeLock().lock();
         try {
             boolean removed = bids.removeIf(o -> o.getOrderId().equals(orderId));
-            if (!removed) {
-                removed = asks.removeIf(o -> o.getOrderId().equals(orderId));
-            }
+            if (!removed) removed = asks.removeIf(o -> o.getOrderId().equals(orderId));
             return removed;
         } finally {
             rwLock.writeLock().unlock();
@@ -70,38 +60,26 @@ public class OrderBook {
 
     public Optional<Order> peekBestBid() {
         rwLock.readLock().lock();
-        try {
-            return Optional.ofNullable(bids.peek());
-        } finally {
-            rwLock.readLock().unlock();
-        }
+        try { return Optional.ofNullable(bids.peek()); }
+        finally { rwLock.readLock().unlock(); }
     }
 
     public Optional<Order> peekBestAsk() {
         rwLock.readLock().lock();
-        try {
-            return Optional.ofNullable(asks.peek());
-        } finally {
-            rwLock.readLock().unlock();
-        }
+        try { return Optional.ofNullable(asks.peek()); }
+        finally { rwLock.readLock().unlock(); }
     }
 
     public Order pollBestBid() {
         rwLock.writeLock().lock();
-        try {
-            return bids.poll();
-        } finally {
-            rwLock.writeLock().unlock();
-        }
+        try { return bids.poll(); }
+        finally { rwLock.writeLock().unlock(); }
     }
 
     public Order pollBestAsk() {
         rwLock.writeLock().lock();
-        try {
-            return asks.poll();
-        } finally {
-            rwLock.writeLock().unlock();
-        }
+        try { return asks.poll(); }
+        finally { rwLock.writeLock().unlock(); }
     }
 
     public double getSpread() {
@@ -130,18 +108,15 @@ public class OrderBook {
         }
     }
 
-    /**
-     * Aggregates order queue into price levels for market depth display.
-     */
     public List<LevelDepth> getBidsDepth(int maxLevels) {
         rwLock.readLock().lock();
         try {
             Map<Double, int[]> aggregated = new TreeMap<>(Collections.reverseOrder());
             for (Order o : bids) {
                 if (o.getRemainingQuantity() > 0) {
-                    int[] curr = aggregated.computeIfAbsent(o.getPrice(), k -> new int[2]);
-                    curr[0] += o.getRemainingQuantity(); // total quantity
-                    curr[1] += 1;                       // count of orders
+                    if (!aggregated.containsKey(o.getPrice())) aggregated.put(o.getPrice(), new int[2]);
+                    aggregated.get(o.getPrice())[0] += o.getRemainingQuantity();
+                    aggregated.get(o.getPrice())[1] += 1;
                 }
             }
             List<LevelDepth> depth = new ArrayList<>();
@@ -161,9 +136,9 @@ public class OrderBook {
             Map<Double, int[]> aggregated = new TreeMap<>();
             for (Order o : asks) {
                 if (o.getRemainingQuantity() > 0) {
-                    int[] curr = aggregated.computeIfAbsent(o.getPrice(), k -> new int[2]);
-                    curr[0] += o.getRemainingQuantity();
-                    curr[1] += 1;
+                    if (!aggregated.containsKey(o.getPrice())) aggregated.put(o.getPrice(), new int[2]);
+                    aggregated.get(o.getPrice())[0] += o.getRemainingQuantity();
+                    aggregated.get(o.getPrice())[1] += 1;
                 }
             }
             List<LevelDepth> depth = new ArrayList<>();
@@ -180,7 +155,9 @@ public class OrderBook {
     public int getTotalBidQuantity() {
         rwLock.readLock().lock();
         try {
-            return bids.stream().mapToInt(Order::getRemainingQuantity).sum();
+            int total = 0;
+            for (Order o : bids) total = total + o.getRemainingQuantity();
+            return total;
         } finally {
             rwLock.readLock().unlock();
         }
@@ -189,7 +166,9 @@ public class OrderBook {
     public int getTotalAskQuantity() {
         rwLock.readLock().lock();
         try {
-            return asks.stream().mapToInt(Order::getRemainingQuantity).sum();
+            int total = 0;
+            for (Order o : asks) total = total + o.getRemainingQuantity();
+            return total;
         } finally {
             rwLock.readLock().unlock();
         }

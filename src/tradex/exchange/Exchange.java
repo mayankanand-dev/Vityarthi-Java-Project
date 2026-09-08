@@ -21,18 +21,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Central exchange orchestrator managing listed order books, market lifecycle,
- * risk control checks, and routing orders to the matching engine.
- */
 public class Exchange {
-    private final Map<String, OrderBook> orderBooks = new ConcurrentHashMap<>();
-    private final MatchingEngine matchingEngine;
-    private final StockRepository stockRepo;
-    private final OrderRepository orderRepo;
-    private final AccountRepository accountRepo;
-    private final HoldingRepository holdingRepo;
-    private MarketStatus marketStatus = MarketStatus.OPEN;
+    Map<String, OrderBook> orderBooks = new ConcurrentHashMap<>();
+    MatchingEngine matchingEngine;
+    StockRepository stockRepo;
+    OrderRepository orderRepo;
+    AccountRepository accountRepo;
+    HoldingRepository holdingRepo;
+    MarketStatus marketStatus = MarketStatus.OPEN;
 
     public Exchange(MatchingEngine matchingEngine, StockRepository stockRepo,
                     OrderRepository orderRepo, AccountRepository accountRepo,
@@ -54,28 +50,26 @@ public class Exchange {
 
     public OrderBook getOrderBook(String symbol) {
         String sym = symbol.toUpperCase().trim();
-        return orderBooks.computeIfAbsent(sym, OrderBook::new);
+        if (!orderBooks.containsKey(sym)) {
+            orderBooks.put(sym, new OrderBook(sym));
+        }
+        return orderBooks.get(sym);
     }
 
-    public MarketStatus getMarketStatus() {
-        return marketStatus;
-    }
+    public MarketStatus getMarketStatus() { return marketStatus; }
+    public void setMarketStatus(MarketStatus marketStatus) { this.marketStatus = marketStatus; }
 
-    public void setMarketStatus(MarketStatus marketStatus) {
-        this.marketStatus = marketStatus;
-    }
-
-    /**
-     * Submits an order after performing risk controls and pre-trade checks.
-     */
     public synchronized List<Trade> submitOrder(Order order) throws TradeXException {
         if (marketStatus != MarketStatus.OPEN) {
             throw new MarketClosedException("TradeX Exchange is currently " + marketStatus);
         }
 
         String symbol = order.getSymbol();
-        Stock stock = stockRepo.findBySymbol(symbol)
-                .orElseThrow(() -> new InvalidStockException("Stock " + symbol + " is not listed on TradeX."));
+        Optional<Stock> stockOpt = stockRepo.findBySymbol(symbol);
+        if (!stockOpt.isPresent()) {
+            throw new InvalidStockException("Stock " + symbol + " is not listed on TradeX.");
+        }
+        Stock stock = stockOpt.get();
 
         CircuitBreaker.checkMarketStatus(stock);
 
@@ -83,30 +77,31 @@ public class Exchange {
             throw new InvalidOrderException("Order quantity must be strictly greater than 0.");
         }
 
-        // Limit order price checks
         if (order.getType() == OrderType.LIMIT) {
-            if (order.getPrice() <= 0) {
-                throw new InvalidOrderException("Limit order price must be strictly positive.");
-            }
+            if (order.getPrice() <= 0) throw new InvalidOrderException("Limit order price must be strictly positive.");
             CircuitBreaker.validatePriceBand(stock, order.getPrice());
         }
 
-        // Risk validation: Cash availability for BUY orders
+        // check buyer has enough cash
         if (order.getSide() == OrderSide.BUY) {
-            Account account = accountRepo.findById(order.getAccountId())
-                    .orElseThrow(() -> new TradeXException("Account " + order.getAccountId() + " not found."));
+            Optional<Account> accountOpt = accountRepo.findById(order.getAccountId());
+            if (!accountOpt.isPresent()) throw new TradeXException("Account " + order.getAccountId() + " not found.");
+            Account account = accountOpt.get();
 
-            double estimatedPrice = order.getType() == OrderType.MARKET ? stock.getCurrentPrice() : order.getPrice();
+            double estimatedPrice;
+            if (order.getType() == OrderType.MARKET) {
+                estimatedPrice = stock.getCurrentPrice();
+            } else {
+                estimatedPrice = order.getPrice();
+            }
             double requiredCash = (order.getOriginalQuantity() * estimatedPrice) +
                     SettlementEngine.calculateBrokerage(order.getOriginalQuantity() * estimatedPrice);
 
             if (account.getAvailableCash() < requiredCash) {
                 throw new InsufficientFundsException(String.format(
-                        "Insufficient funds. Required: ₹%.2f, Available: ₹%.2f",
-                        requiredCash, account.getAvailableCash()));
+                        "Insufficient funds. Required: Rs.%.2f, Available: Rs.%.2f", requiredCash, account.getAvailableCash()));
             }
 
-            // Freeze funds to prevent double-spending across concurrent orders
             account.freezeCash(order.getOriginalQuantity() * estimatedPrice);
             try {
                 accountRepo.updateBalances(account);
@@ -115,15 +110,16 @@ public class Exchange {
             }
         }
 
-        // Risk validation: Share availability for SELL orders
+        // check seller has enough shares
         if (order.getSide() == OrderSide.SELL) {
-            Holding holding = holdingRepo.findByAccountAndSymbol(order.getAccountId(), symbol)
-                    .orElseThrow(() -> new InsufficientHoldingsException("No holdings found for " + symbol));
-
+            Optional<Holding> holdingOpt = holdingRepo.findByAccountAndSymbol(order.getAccountId(), symbol);
+            if (!holdingOpt.isPresent()) {
+                throw new InsufficientHoldingsException("No holdings found for " + symbol);
+            }
+            Holding holding = holdingOpt.get();
             if (holding.getQuantity() < order.getOriginalQuantity()) {
                 throw new InsufficientHoldingsException(String.format(
-                        "Insufficient shares. Held: %d, Requested to sell: %d",
-                        holding.getQuantity(), order.getOriginalQuantity()));
+                        "Insufficient shares. Held: %d, Requested to sell: %d", holding.getQuantity(), order.getOriginalQuantity()));
             }
         }
 
@@ -131,23 +127,13 @@ public class Exchange {
         return matchingEngine.match(order, book, stock);
     }
 
-    /**
-     * Cancels an active or partially filled order and unfreezes reserved cash.
-     */
     public synchronized boolean cancelOrder(String orderId, int accountId) throws TradeXException {
         Optional<Order> orderOpt = orderRepo.findById(orderId);
-        if (orderOpt.isEmpty()) {
-            throw new InvalidOrderException("Order " + orderId + " does not exist.");
-        }
+        if (!orderOpt.isPresent()) throw new InvalidOrderException("Order " + orderId + " does not exist.");
 
         Order order = orderOpt.get();
-        if (order.getAccountId() != accountId) {
-            throw new TradeXException("Unauthorized: Cannot cancel another trader's order.");
-        }
-
-        if (order.isTerminal()) {
-            throw new InvalidOrderException("Order " + orderId + " is already " + order.getStatus());
-        }
+        if (order.getAccountId() != accountId) throw new TradeXException("Unauthorized: Cannot cancel another trader's order.");
+        if (order.isTerminal()) throw new InvalidOrderException("Order " + orderId + " is already " + order.getStatus());
 
         OrderBook book = getOrderBook(order.getSymbol());
         boolean removed = book.cancelOrder(orderId);
@@ -155,8 +141,6 @@ public class Exchange {
         order.setStatus(OrderStatus.CANCELLED);
         try {
             orderRepo.updateOrderStatus(orderId, OrderStatus.CANCELLED, order.getFilledQuantity());
-
-            // Unfreeze any remaining reserved funds if it was a buy order
             if (order.getSide() == OrderSide.BUY) {
                 Optional<Account> accOpt = accountRepo.findById(accountId);
                 if (accOpt.isPresent()) {

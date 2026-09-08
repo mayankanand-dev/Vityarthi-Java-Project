@@ -4,10 +4,6 @@ import tradex.exception.CircuitBreakerException;
 import tradex.model.Stock;
 import tradex.model.enums.MarketStatus;
 
-/**
- * Exchange risk control monitor that enforces per-instrument price bands (+/- 10%)
- * and volatility halt mechanisms.
- */
 public class CircuitBreaker {
 
     public static void validatePriceBand(Stock stock, double requestedPrice) throws CircuitBreakerException {
@@ -16,12 +12,12 @@ public class CircuitBreaker {
         }
         if (requestedPrice > stock.getUpperCircuit()) {
             throw new CircuitBreakerException(String.format(
-                    "Price ₹%.2f breaches upper circuit band (₹%.2f) for %s",
+                    "Price Rs.%.2f breaches upper circuit band (Rs.%.2f) for %s",
                     requestedPrice, stock.getUpperCircuit(), stock.getSymbol()));
         }
         if (requestedPrice < stock.getLowerCircuit()) {
             throw new CircuitBreakerException(String.format(
-                    "Price ₹%.2f breaches lower circuit band (₹%.2f) for %s",
+                    "Price Rs.%.2f breaches lower circuit band (Rs.%.2f) for %s",
                     requestedPrice, stock.getLowerCircuit(), stock.getSymbol()));
         }
     }
