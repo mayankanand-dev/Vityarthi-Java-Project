@@ -13,8 +13,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public class OrderService {
-    private final Exchange exchange;
-    private final OrderRepository orderRepo;
+    Exchange exchange;
+    OrderRepository orderRepo;
 
     public OrderService(Exchange exchange, OrderRepository orderRepo) {
         this.exchange = exchange;
@@ -34,7 +34,6 @@ public class OrderService {
                 .status(OrderStatus.OPEN)
                 .timestamp(LocalDateTime.now())
                 .build();
-
         return exchange.submitOrder(order);
     }
 
@@ -42,11 +41,6 @@ public class OrderService {
         return exchange.cancelOrder(orderId, accountId);
     }
 
-    public List<Order> getOpenOrders(int accountId) {
-        return orderRepo.findOpenOrdersByAccountId(accountId);
-    }
-
-    public List<Order> getAllOrders(int accountId) {
-        return orderRepo.findByAccountId(accountId);
-    }
+    public List<Order> getOpenOrders(int accountId) { return orderRepo.findOpenOrdersByAccountId(accountId); }
+    public List<Order> getAllOrders(int accountId) { return orderRepo.findByAccountId(accountId); }
 }

@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class AlertService {
-    private final AlertRepository alertRepo;
+    AlertRepository alertRepo;
 
     public AlertService(AlertRepository alertRepo) {
         this.alertRepo = alertRepo;
@@ -25,29 +25,22 @@ public class AlertService {
         return alertRepo.listByAccountId(accountId);
     }
 
-    /**
-     * Checks all pending alerts against newly updated stock prices or volumes.
-     * Returns any newly triggered alerts.
-     */
+    // check all active alerts for a stock and trigger if condition is met
     public List<Alert> checkAndTriggerAlerts(Stock stock) {
         List<Alert> triggeredAlerts = new ArrayList<>();
         List<Alert> activeAlerts = alertRepo.listActiveBySymbol(stock.getSymbol());
 
         for (Alert alert : activeAlerts) {
             boolean triggered = false;
-            switch (alert.getType()) {
-                case PRICE_ABOVE:
-                    if (stock.getCurrentPrice() >= alert.getTargetValue()) triggered = true;
-                    break;
-                case PRICE_BELOW:
-                    if (stock.getCurrentPrice() <= alert.getTargetValue()) triggered = true;
-                    break;
-                case PCT_CHANGE:
-                    if (Math.abs(stock.getChangePercentage()) >= alert.getTargetValue()) triggered = true;
-                    break;
-                case VOLUME_ABOVE:
-                    if (stock.getVolume() >= (long) alert.getTargetValue()) triggered = true;
-                    break;
+
+            if (alert.getType() == AlertType.PRICE_ABOVE) {
+                if (stock.getCurrentPrice() >= alert.getTargetValue()) triggered = true;
+            } else if (alert.getType() == AlertType.PRICE_BELOW) {
+                if (stock.getCurrentPrice() <= alert.getTargetValue()) triggered = true;
+            } else if (alert.getType() == AlertType.PCT_CHANGE) {
+                if (Math.abs(stock.getChangePercentage()) >= alert.getTargetValue()) triggered = true;
+            } else if (alert.getType() == AlertType.VOLUME_ABOVE) {
+                if (stock.getVolume() >= (long) alert.getTargetValue()) triggered = true;
             }
 
             if (triggered) {
@@ -60,7 +53,6 @@ public class AlertService {
                 }
             }
         }
-
         return triggeredAlerts;
     }
 }

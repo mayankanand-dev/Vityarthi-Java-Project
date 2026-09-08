@@ -17,9 +17,9 @@ import java.util.List;
 import java.util.Optional;
 
 public class AccountService {
-    private final UserRepository userRepo;
-    private final AccountRepository accountRepo;
-    private final TransactionRepository txRepo;
+    UserRepository userRepo;
+    AccountRepository accountRepo;
+    TransactionRepository txRepo;
 
     public AccountService(UserRepository userRepo, AccountRepository accountRepo, TransactionRepository txRepo) {
         this.userRepo = userRepo;
@@ -27,6 +27,7 @@ public class AccountService {
         this.txRepo = txRepo;
     }
 
+    // hash the password using SHA-256 so we dont store it in plain text
     public static String hashPassword(String password) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
@@ -58,10 +59,11 @@ public class AccountService {
             User newUser = new User(username.trim(), hashPassword(password), role);
             User savedUser = userRepo.save(newUser);
 
-            double depositAmount = Math.max(1000.0, initialCash);
+            double depositAmount = initialCash;
+            if (depositAmount < 1000.0) depositAmount = 1000.0;
+
             Account account = new Account(savedUser.getId(), depositAmount);
             Account savedAccount = accountRepo.save(account);
-
             txRepo.save(new Transaction(savedAccount.getAccountId(), "INITIAL_DEPOSIT", depositAmount, depositAmount, "Initial virtual account grant"));
 
             return savedUser;
@@ -71,31 +73,25 @@ public class AccountService {
     }
 
     public User login(String username, String password) throws TradeXException {
-        User user = userRepo.findByUsername(username)
-                .orElseThrow(() -> new AuthenticationException("Invalid username or password."));
-
+        Optional<User> userOpt = userRepo.findByUsername(username);
+        if (!userOpt.isPresent()) {
+            throw new AuthenticationException("Invalid username or password.");
+        }
+        User user = userOpt.get();
         if (!user.getPasswordHash().equals(hashPassword(password))) {
             throw new AuthenticationException("Invalid username or password.");
         }
-
         return user;
     }
 
-    public Optional<Account> getAccountByUserId(int userId) {
-        return accountRepo.findByUserId(userId);
-    }
-
-    public Optional<Account> getAccount(int accountId) {
-        return accountRepo.findById(accountId);
-    }
+    public Optional<Account> getAccountByUserId(int userId) { return accountRepo.findByUserId(userId); }
+    public Optional<Account> getAccount(int accountId) { return accountRepo.findById(accountId); }
 
     public synchronized void deposit(int accountId, double amount) throws TradeXException {
-        if (amount <= 0) {
-            throw new TradeXException("Deposit amount must be positive.");
-        }
-        Account account = accountRepo.findById(accountId)
-                .orElseThrow(() -> new TradeXException("Account not found."));
-
+        if (amount <= 0) throw new TradeXException("Deposit amount must be positive.");
+        Optional<Account> accountOpt = accountRepo.findById(accountId);
+        if (!accountOpt.isPresent()) throw new TradeXException("Account not found.");
+        Account account = accountOpt.get();
         account.deposit(amount);
         try {
             accountRepo.updateBalances(account);
@@ -106,17 +102,13 @@ public class AccountService {
     }
 
     public synchronized void withdraw(int accountId, double amount) throws TradeXException {
-        if (amount <= 0) {
-            throw new TradeXException("Withdrawal amount must be positive.");
-        }
-        Account account = accountRepo.findById(accountId)
-                .orElseThrow(() -> new TradeXException("Account not found."));
-
+        if (amount <= 0) throw new TradeXException("Withdrawal amount must be positive.");
+        Optional<Account> accountOpt = accountRepo.findById(accountId);
+        if (!accountOpt.isPresent()) throw new TradeXException("Account not found.");
+        Account account = accountOpt.get();
         if (account.getAvailableCash() < amount) {
-            throw new TradeXException(String.format("Insufficient available balance. Available: ₹%.2f, Requested: ₹%.2f",
-                    account.getAvailableCash(), amount));
+            throw new TradeXException("Insufficient available balance. Available: Rs." + account.getAvailableCash() + ", Requested: Rs." + amount);
         }
-
         account.withdraw(amount);
         try {
             accountRepo.updateBalances(account);
