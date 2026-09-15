@@ -1,9 +1,7 @@
 # Project Statement — TradeX
 
-**VITyarthi Course Project**  
 - **Student Name**: Mayank Anand  
 - **Registration No**: 25BAI11209  
-- **University**: VIT Bhopal University  
 
 ---
 

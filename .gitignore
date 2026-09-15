@@ -23,4 +23,7 @@ sources.txt
 .classpath
 .project
 
+# Graphic assets
+*.psd
+
 TradeX_Antigravity_Project_Spec.md

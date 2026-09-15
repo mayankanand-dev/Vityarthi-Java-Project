@@ -1,9 +1,7 @@
 # TradeX — CLI Stock Trading & Exchange Simulator
 
-**VITyarthi Project**  
 - **Student Name**: Mayank Anand  
 - **Registration No**: 25BAI11209  
-- **University**: VIT Bhopal University  
 
 A console-based stock trading platform and matching engine written in native Java. TradeX simulates the core operations of an equity exchange: limit order books, price-time priority matching, circuit breakers, portfolio valuation, and price simulation—all running locally in the terminal without external servers or frameworks.
 
