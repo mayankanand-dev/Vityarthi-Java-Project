@@ -1,48 +1,64 @@
-# TradeX — CLI Stock Exchange Simulator
-## Project Problem Statement & Scope Specification
+# Project Statement — TradeX
+
+**VITyarthi Course Project**  
+- **Student Name**: Mayank Anand  
+- **Registration No**: 25BAI11209  
+- **University**: VIT Bhopal University  
 
 ---
 
 ## 1. Problem Statement
 
-Understanding the real-time operational mechanics of a modern financial exchange—specifically the **double-auction order book**, **price-time priority matching**, **atomic trade clearing**, **settlement**, and **circuit breaker risk controls**—presents a steep learning curve for students and software engineers. 
+When learning about financial applications in computer science coursework, students often encounter oversimplified stock market projects. In most of these implementations, buying a share simply means clicking a button to subtract money from a balance and increment an integer in a database table at a static price. 
 
-Most educational trading applications are either simplified portfolio trackers that query static delayed web APIs or superficial mock databases that execute unrealistic instantaneous buy/sell transactions without maintaining a matching engine or counterparty order book.
+In actual stock exchanges, transactions do not work this way. Real exchanges rely on an electronic double-auction order book where:
+- Every trade requires an opposing buyer and seller who agree on a price.
+- Limit orders sit in an order book queue and are matched based on strict Price-Time Priority (orders at better prices fill first, and orders at the same price fill in the order they arrived).
+- Market orders execute immediately against the best available opposite quotes, often taking multiple price levels if quantity is large.
+- Trades require atomic clearing and settlement so that cash deductions and share transfers happen together without race conditions.
+- Exchanges enforce volatility safeguards like circuit breakers (price bands) to prevent catastrophic swings during abnormal market conditions.
 
-Consequently, learners rarely observe how bid-ask spreads fluctuate, how resting limit orders provide market liquidity, how crossing orders trigger executions at maker prices, or how concurrent automated traders interact with shared financial state. 
+Because live financial market data feeds and brokerage APIs are restricted, expensive, and involve financial risk, it is difficult for students to experiment with or understand these exchange mechanics first-hand.
 
-**TradeX** resolves this problem by implementing a comprehensive, self-contained, terminal-based stock exchange simulator written from scratch in native Java. It bridges foundational computer science concepts (Object-Oriented Design, Dual PriorityQueue heaps, Concurrency, JDBC, Java Streams, and NIO.2) with practical financial market infrastructure.
+**TradeX** addresses this issue by providing a self-contained, console-based stock trading and matching engine built in core Java. It gives learners an interactive environment to observe order book queues, submit different types of orders, trigger trades against simulated counterparties, and inspect portfolio valuations and settlement records.
 
 ---
 
-## 2. Project Scope
+## 2. Scope of the Project
 
-- **Simulated Environment**: TradeX operates exclusively in a simulated environment using virtual currency and synthetic market instruments modeled after major Indian blue-chip equities (e.g., RELIANCE, TCS, INFY, HDFCBANK).
-- **No Real-Money Transactions**: The platform does not process real currency, initiate banking transactions, or connect to external production brokerage APIs.
-- **Pure Terminal CLI**: The entire application runs natively within a command-line terminal interface, requiring zero web browsers, GUI dependencies, or external application servers.
-- **Deterministic & Stochastic Simulation**: The platform provides both a discrete step simulator and continuous background market threads driven by Geometric Brownian Motion with support for deterministic random seeds during automated testing.
+### What the Project Covers:
+- **Terminal-Based Interface**: A text-based interactive menu for account operations, market browsing, order entry, and portfolio inspection.
+- **Order Management & Types**: Support for Market, Limit, Stop, and Stop-Limit orders across both Buy and Sell sides.
+- **In-Memory Matching Engine**: Continuous double-auction matching engine with two priority queues (max-heap for bids, min-heap for asks) enforcing price-time priority.
+- **Trade Settlement**: Immediate clearing logic that debits/credits buyer and seller cash, updates stock inventory, tracks realized profit/loss, and recalculates weighted average acquisition costs.
+- **Market Guardrails**: Pre-trade validation including available funds/holdings checks and daily 10% upper/lower circuit breaker bands.
+- **Market Simulation**: A price generator based on random steps and simulated news events, along with automated background trading bots that provide market liquidity.
+- **Technical Analysis**: Basic mathematical calculation of 20-period and 50-period Simple Moving Averages (SMA) and the 14-period Relative Strength Index (RSI).
+- **Relational Persistence**: Local storage of users, transactions, orders, and portfolios using SQLite through standard JDBC prepared statements.
+- **Exporting**: Exporting portfolio summaries and market quotes to CSV files using Java NIO.2.
+
+### What is Kept Out of Scope:
+- **Real Money Transactions**: The system works entirely with virtual cash; no actual payment gateways or banking APIs are used.
+- **Live Market Connectivity**: The platform runs locally and does not connect to external stock exchanges or broker web APIs.
+- **Graphical Web or Mobile UI**: The application is kept strictly to a terminal interface to prioritize backend logic, concurrency, and data structures over front-end web design.
+- **Derivatives & Leverage**: Options, futures, short-selling with borrowed margin, and intraday leverage are not implemented.
 
 ---
 
 ## 3. Target Users
 
-1. **Undergraduate Computer Science Students**: Learners studying core and advanced Java concepts who seek an authentic, production-grade example of OOP, multithreading, custom collections, and design patterns.
-2. **Finance & FinTech Students**: Learners who wish to explore the operational lifecycle of equity matching engines, bid-ask spreads, circuit breakers, and post-trade settlement without financial risk.
-3. **Academic Course Evaluators**: Faculty and evaluators who require a self-contained, reproducible, zero-configuration software project with built-in test suites and clean architecture.
+- **Computer Science & Engineering Students**: Students learning core Java, object-oriented principles, custom comparators with priority queues, multithreading, and JDBC database programming.
+- **Finance & Business Students**: Learners who want to understand how order books match orders, what bid-ask spreads represent, and how limit orders behave without financial risk.
+- **Academic Evaluators**: Faculty evaluating coursework who require a clean, reproducible Java application that compiles and runs directly from the command line without complex environment setups.
 
 ---
 
-## 4. High-Level Functional Modules
+## 4. High-Level Features
 
-| Module | Core Capabilities |
-| :--- | :--- |
-| **User & Account Management** | SHA-256 trader authentication, account creation, deposit/withdrawal of virtual cash, and transaction ledger. |
-| **Market & Stock Catalog** | Real-time quote ticker for 10 blue-chip equities, sector classification, circuit limit bands, and advance/decline breadth. |
-| **Order Management** | Validation and lifecycle management for Market, Limit, Stop, and Stop-Limit orders across Buy and Sell sides. |
-| **Double-Auction Order Book** | Dual PriorityQueues enforcing strict Price-Time priority with thread-safe `ReentrantReadWriteLock` synchronization. |
-| **Matching & Settlement Engine** | Continuous double-auction cross detection, maker price execution, partial fill processing, and atomic cash/share clearing. |
-| **Portfolio & P&L Module** | Real-time calculation of share holdings, weighted average cost basis, unrealized P&L, realized P&L, and net worth. |
-| **Technical Analysis Engine** | Quantitative computation of SMA(20), SMA(50), EMA(20), RSI(14), volatility, and algorithmic trading signals. |
-| **Market Simulation & Bots** | Geometric Brownian Motion price simulation, macroeconomic news injection, and concurrent trading bot agents. |
-| **Analytics & Reports** | Java Streams ranking for top gainers, losers, and turnover, plus Java NIO.2 CSV file exports. |
-| **Database Persistence** | SQLite 3 embedded relational database with prepared statements and relational referential integrity. |
+- **User Accounts & Authentication**: Password hashing using SHA-256, user login sessions, and virtual deposit/withdrawal capabilities.
+- **Stock Market Catalog**: Live ticker displaying current prices, percentage change, day high/low, and trading volume for 10 pre-seeded Indian equities.
+- **Double-Auction Order Book**: Separate bid and ask priority queues with Level-5 market depth visualization showing price, aggregated quantity, and order count.
+- **Order Execution Engine**: Automatic detection of price crosses, trade execution at the maker's resting price, and tracking of partial fills.
+- **Portfolio Tracking**: Real-time overview of available cash, invested capital, total portfolio value, unrealized P&L, and realized P&L per stock.
+- **Market Price Simulation**: Automatic price updates driven by random walk fluctuations, macroeconomic headlines, and background bot orders.
+- **Automated Verification**: Built-in test runner containing 14 unit test cases checking order validation, price-time priority, margin unfreezing, and balance invariance.
