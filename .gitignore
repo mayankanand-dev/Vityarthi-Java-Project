@@ -6,6 +6,7 @@ target/
 # Package Files
 *.jar
 !lib/*.jar
+!tradex.jar
 
 # Local database & logs
 data/
